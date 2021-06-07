@@ -28,16 +28,16 @@ var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "codebox",
+	Use:   "dockbox",
 	Short: "Try out code without creating any side effects!",
 	Long: `
-Usage: codebox [OPTIONS] COMMAND
+Usage: dockbox [OPTIONS] COMMAND
 
 Manage workspaces and dependencies with ease in an isolated, secure environment.
 	
-To get started with codebox, try entering:
+To get started with dockbox, try entering:
 
-	codebox clone <git-url>`,
+	dockbox clone <git-url>`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -53,7 +53,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.codebox.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.dockbox.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -70,9 +70,9 @@ func initConfig() {
 		home, err := homedir.Dir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".codebox" (without extension).
+		// Search config in home directory with name ".dockbox" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".codebox")
+		viper.SetConfigName(".dockbox")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

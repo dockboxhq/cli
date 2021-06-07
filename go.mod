@@ -1,4 +1,4 @@
-module github.com/sriharivishnu/codebox
+module github.com/sriharivishnu/dockbox
 
 go 1.16
 
