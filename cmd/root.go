@@ -37,7 +37,7 @@ Manage workspaces and dependencies with ease in an isolated, secure environment.
 	
 To get started with dockbox, try entering:
 
-	dockbox clone <git-url>`,
+	dockbox create <git-url>`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

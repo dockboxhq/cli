@@ -6,6 +6,7 @@ require (
 	github.com/containerd/containerd v1.5.2 // indirect
 	github.com/docker/docker v20.10.7+incompatible
 	github.com/docker/go-connections v0.4.0 // indirect
+	github.com/go-git/go-git/v5 v5.4.2
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/moby/term v0.0.0-20201216013528-df9cb8a40635 // indirect
