@@ -16,12 +16,14 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"os"
+	"log"
 	"io/ioutil"
 	// "io"
 	"regexp"
 	"path"
+	"path/filepath"
+	"net/url"
 	
 	"github.com/spf13/cobra"
 
@@ -44,40 +46,94 @@ var createCmd = &cobra.Command{
 	Long: `Use git create to create a new dockbox.`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		var url = args[0]
-		var path = "."
+		targetURL := args[0]
+		repoURL, err := url.Parse(targetURL)
+		common.CheckError(err)
+
+		clonePath := path.Base(repoURL.Path)
 		if (len(args) > 1) {
-			path = args[1]
+			clonePath = args[1]
 		}
 
-		cloneRepository(url, path)
-		getDockerfile(path)
-		fmt.Printf("Successfully created new dockbox")
+		cloneRepository(targetURL, clonePath)
+		getDockerfile(clonePath)
+		log.Println("Successfully created new dockbox")
 		
 	},
 }
 
 
 
-func getDockerfile(dirPath string) {
-	fmt.Printf("Creating dockbox...")
+func getDockerfile(dirPath string) ([]byte, error) {
+	log.Println("Creating dockbox...")
 	files, err := ioutil.ReadDir(dirPath)
     common.CheckError(err)
 	r, _ := regexp.Compile("(?i)(dockerfile)")
     for _, f := range files {
-		if (r.MatchString(f.Name())) {
-			fmt.Printf("Found a Dockerfile in cloned repository! Using '%s' to create dockbox...", f.Name())
-			_, err := ioutil.ReadFile(path.Join(dirPath, f.Name())) 
+		if (!f.IsDir() && r.MatchString(f.Name())) {
+			log.Println("Found a Dockerfile in cloned repository! Using '%s' to create dockbox...", f.Name())
+			contents, err := ioutil.ReadFile(path.Join(dirPath, f.Name())) 
 			if (err != nil) {
-				fmt.Printf("Error while reading Dockerfile: %s", err)
-				return;
+				log.Fatalf("Error while reading Dockerfile: %s", err)
+				return nil, err
 			}
+			return contents, nil
 		}
     }
 
+	log.Println("Could not find Dockerfile. Generating one for you...")
+	contents, err := generateDockerfile(dirPath)
 	// cli, err := client.NewClientWithOpts(client.FromEnv)
 	// 	common.CheckError(err)
+	return contents, err
 
+}
+
+
+func getLanguageStats(filePath string) (map[string]int, error) {
+	language_info := make(map[string]int)
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// If path is a file
+	if !fileInfo.IsDir() {
+		language_info[filepath.Ext(filePath)] += 1
+		return language_info, nil
+	}
+
+	files, err := ioutil.ReadDir(filePath)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		currentFilePath := path.Join(filePath, f.Name())
+		log.Println("Current: PATH: ", f.Name())
+
+		if (f.IsDir()) {
+			recursive_languages, err := getLanguageStats(currentFilePath)
+			if (err != nil) {
+				return nil, err
+			}
+			log.Println(f.Name(), recursive_languages)
+			for k, v := range recursive_languages {
+				language_info[k] += v
+			}
+		} else {
+			log.Println(filepath.Ext(f.Name()))
+			language_info[filepath.Ext(f.Name())] += 1
+			return language_info, nil
+		}
+    }
+	return language_info, nil
+}
+func generateDockerfile(dirPath string) ([]byte, error) {
+	stats, err := getLanguageStats(dirPath)
+	common.CheckError(err)
+	log.Println(dirPath, stats)
+	return nil, nil
 }
 
 func cloneRepository(url string, path string) {
