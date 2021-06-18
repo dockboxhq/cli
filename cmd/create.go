@@ -36,7 +36,7 @@ import (
 	// "github.com/docker/docker/client"
 
 	"github.com/sriharivishnu/dockbox/cmd/common"
-	// "github.com/sriharivishnu/dockbox/cmd/constants"
+	"github.com/sriharivishnu/dockbox/cmd/constants"
 )
 
 // createCmd represents the create command
@@ -81,7 +81,7 @@ func getDockerfile(dirPath string) ([]byte, error) {
 		}
     }
 
-	log.Println("Could not find Dockerfile. Generating one for you...")
+	log.Println("Could not find Dockerfile in root directory of repository. Generating one for you...")
 	contents, err := generateDockerfile(dirPath)
 	// cli, err := client.NewClientWithOpts(client.FromEnv)
 	// 	common.CheckError(err)
@@ -90,47 +90,53 @@ func getDockerfile(dirPath string) ([]byte, error) {
 }
 
 
-func getLanguageStats(filePath string) (map[string]int, error) {
-	language_info := make(map[string]int)
+func getLanguageStats(dirPath string, stats map[string]int) (error) {
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		currentFilePath := path.Join(dirPath, f.Name())
+		ignoreCurrent := false
+		for _, rstring := range constants.IgnoredFilesForAnalysis {
+			ignoreCurrent, _ = regexp.MatchString(rstring, currentFilePath)
+			if ignoreCurrent {
+				break
+			}
+		}
 
-	fileInfo, err := os.Stat(filePath)
+		if ignoreCurrent {
+			continue
+		}
+
+		if (f.IsDir()) {
+			err := getLanguageStats(currentFilePath, stats)
+			if (err != nil) {
+				return err
+			}
+		} else {
+			file_extension := filepath.Ext(f.Name())
+			language_name := constants.ExtensionToLanguage[file_extension]
+			if len(language_name) > 0 {
+				stats[language_name] += 1
+			}
+		}
+    }
+	return nil
+}
+func generateDockerfile(dirPath string) ([]byte, error) {
+	fileInfo, err := os.Stat(dirPath)
 	if err != nil {
 		return nil, err
 	}
+	stats := make(map[string]int)
 
 	// If path is a file
 	if !fileInfo.IsDir() {
-		language_info[filepath.Ext(filePath)] += 1
-		return language_info, nil
+		stats[filepath.Ext(dirPath)] += 1
+	} else {
+		err = getLanguageStats(dirPath, stats)
 	}
-
-	files, err := ioutil.ReadDir(filePath)
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range files {
-		currentFilePath := path.Join(filePath, f.Name())
-		log.Println("Current: PATH: ", f.Name())
-
-		if (f.IsDir()) {
-			recursive_languages, err := getLanguageStats(currentFilePath)
-			if (err != nil) {
-				return nil, err
-			}
-			log.Println(f.Name(), recursive_languages)
-			for k, v := range recursive_languages {
-				language_info[k] += v
-			}
-		} else {
-			log.Println(filepath.Ext(f.Name()))
-			language_info[filepath.Ext(f.Name())] += 1
-			return language_info, nil
-		}
-    }
-	return language_info, nil
-}
-func generateDockerfile(dirPath string) ([]byte, error) {
-	stats, err := getLanguageStats(dirPath)
 	common.CheckError(err)
 	log.Println(dirPath, stats)
 	return nil, nil
