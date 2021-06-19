@@ -33,7 +33,7 @@ import (
     // "github.com/docker/docker/pkg/archive"
 
 	// "github.com/docker/docker/api/types"
-	// "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 
 	"github.com/sriharivishnu/dockbox/cmd/common"
 	"github.com/sriharivishnu/dockbox/cmd/constants"
@@ -63,7 +63,6 @@ var createCmd = &cobra.Command{
 }
 
 
-
 func getDockerfile(dirPath string) ([]byte, error) {
 	log.Println("Creating dockbox...")
 	files, err := ioutil.ReadDir(dirPath)
@@ -90,52 +89,38 @@ func getDockerfile(dirPath string) ([]byte, error) {
 }
 
 
-func getLanguageStats(dirPath string, stats map[string]int) (error) {
-	files, err := ioutil.ReadDir(dirPath)
-	if err != nil {
-		return err
-	}
-	for _, f := range files {
-		currentFilePath := path.Join(dirPath, f.Name())
-		ignoreCurrent := false
-		for _, rstring := range constants.IgnoredFilesForAnalysis {
-			ignoreCurrent, _ = regexp.MatchString(rstring, currentFilePath)
-			if ignoreCurrent {
-				break
-			}
-		}
-
-		if ignoreCurrent {
-			continue
-		}
-
-		if (f.IsDir()) {
-			err := getLanguageStats(currentFilePath, stats)
-			if (err != nil) {
-				return err
-			}
-		} else {
-			file_extension := filepath.Ext(f.Name())
-			language_name := constants.ExtensionToLanguage[file_extension]
-			if len(language_name) > 0 {
-				stats[language_name] += 1
-			}
-		}
-    }
-	return nil
-}
 func generateDockerfile(dirPath string) ([]byte, error) {
-	fileInfo, err := os.Stat(dirPath)
+	_, err := os.Stat(dirPath)
+	
 	if err != nil {
 		return nil, err
 	}
 	stats := make(map[string]int)
 
 	// If path is a file
-	if !fileInfo.IsDir() {
-		stats[filepath.Ext(dirPath)] += 1
-	} else {
-		err = getLanguageStats(dirPath, stats)
+	err = filepath.Walk(dirPath,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			for _, rstring := range constants.IgnoredFilesForAnalysis {
+				matches, _ := regexp.MatchString(rstring, path)
+				if matches {
+					return nil
+				}
+			}
+			log.Println(path, info.Size())
+			if !info.IsDir() {
+				file_extension := filepath.Ext(info.Name())
+				language_name := constants.ExtensionToLanguage[file_extension]
+				if len(language_name) > 0 {
+					stats[language_name] += 1
+				}
+			}
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
 	}
 	common.CheckError(err)
 	log.Println(dirPath, stats)
@@ -160,4 +145,5 @@ func init() {
 	// and all subcommands, e.g.:
 	createCmd.PersistentFlags().StringP("dockerfile", "d", "", "Use this option to set a dockerfile")
 	createCmd.PersistentFlags().BoolP("keep", "k", false, "Keeps code and artifacts")
+	createCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
 }
