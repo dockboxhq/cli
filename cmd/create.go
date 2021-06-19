@@ -19,21 +19,27 @@ import (
 	"os"
 	"log"
 	"io/ioutil"
+	"fmt"
+	"context"
+	"time"
+	"bufio"
+
 	// "io"
 	"regexp"
 	"path"
 	"path/filepath"
 	"net/url"
+	"strings"
 	
 	"github.com/spf13/cobra"
 
 	"github.com/go-git/go-git/v5"
 
 	// "github.com/mitchellh/go-homedir"
-    // "github.com/docker/docker/pkg/archive"
-
-	// "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/archive"
 
 	"github.com/sriharivishnu/dockbox/cmd/common"
 	"github.com/sriharivishnu/dockbox/cmd/constants"
@@ -56,48 +62,67 @@ var createCmd = &cobra.Command{
 		}
 
 		cloneRepository(targetURL, clonePath)
-		getDockerfile(clonePath)
-		log.Println("Successfully created new dockbox")
+		dockerFileName, err := getDockerfile(clonePath)
+		common.CheckError(err)
+
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		common.CheckError(err)
+		log.Println("Building image...")
+		imageName, err := buildImage(clonePath, dockerFileName, cli)
+		common.CheckError(err)
+		log.Printf("Successfully created new dockbox: %s\n", imageName)
+		
+		// command, err := common.GetUserString("Run a command: ")
+		// common.CheckError(err)
+		
+		// _, err = runContainer(imageName, cli, command)
+		// common.CheckError(err)
+
 		
 	},
 }
 
 
-func getDockerfile(dirPath string) ([]byte, error) {
+func cloneRepository(url string, path string) {
+	_, err := git.PlainClone(path, false, &git.CloneOptions{
+		URL:      url,
+		Progress: os.Stdout,
+	})
+
+	common.CheckError(err)
+}
+
+
+func getDockerfile(dirPath string) (string, error) {
 	log.Println("Creating dockbox...")
 	files, err := ioutil.ReadDir(dirPath)
     common.CheckError(err)
 	r, _ := regexp.Compile("(?i)(dockerfile)")
     for _, f := range files {
 		if (!f.IsDir() && r.MatchString(f.Name())) {
-			log.Println("Found a Dockerfile in cloned repository! Using '%s' to create dockbox...", f.Name())
-			contents, err := ioutil.ReadFile(path.Join(dirPath, f.Name())) 
-			if (err != nil) {
-				log.Fatalf("Error while reading Dockerfile: %s", err)
-				return nil, err
-			}
-			return contents, nil
+			log.Printf("Found a Dockerfile in cloned repository! Using '%s' to create dockbox...\n", f.Name())
+			return f.Name(), nil
 		}
     }
 
 	log.Println("Could not find Dockerfile in root directory of repository. Generating one for you...")
-	contents, err := generateDockerfile(dirPath)
+	name, err := generateDockerfile(dirPath)
 	// cli, err := client.NewClientWithOpts(client.FromEnv)
 	// 	common.CheckError(err)
-	return contents, err
+	return name, err
 
 }
 
 
-func generateDockerfile(dirPath string) ([]byte, error) {
+func generateDockerfile(dirPath string) (string, error) {
 	_, err := os.Stat(dirPath)
 	
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	stats := make(map[string]int)
 
-	// If path is a file
+	// Walk directory
 	err = filepath.Walk(dirPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -119,30 +144,117 @@ func generateDockerfile(dirPath string) ([]byte, error) {
 			}
 			return nil
 		})
-	if err != nil {
-		log.Println(err)
-	}
 	common.CheckError(err)
-	log.Println(dirPath, stats)
-	return nil, nil
+	log.Println(stats)
+	sorted := common.SortMap(stats)
+	log.Println(sorted)
+
+	var chosenLanguage string = ""
+	for i := len(sorted) - 1; i >= 0 ; i-- {
+		res, _ := common.GetUserBoolean("Found language: '%s'. Generate Dockerfile for this language? ", sorted[i].Key)
+		if (res) {
+			chosenLanguage = sorted[i].Key
+			break
+		}
+	}
+
+	if len(chosenLanguage) == 0 {
+		chosenLanguage = "unknown"
+	}
+
+	log.Printf("Found Image: %s", constants.LanguageToImageMapper[chosenLanguage])
+	return createDockerFileForLanguage(dirPath, constants.LanguageToImageMapper[chosenLanguage])
 }
 
-func cloneRepository(url string, path string) {
-	_, err := git.PlainClone(path, false, &git.CloneOptions{
-		URL:      url,
-		Progress: os.Stdout,
-	})
+func createDockerFileForLanguage(dirPath string, language constants.Image) (string, error) {
+	var sb strings.Builder
 
-	common.CheckError(err)
+	_, err := sb.WriteString(fmt.Sprintf("FROM %s\n", language.Image))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = sb.WriteString("WORKDIR /app\n")
+	if err != nil {
+		return "", err
+	}
+	
+	_, err = sb.WriteString("COPY . .\n")
+	if err != nil {
+		return "", err
+	}
+
+	for _, command := range language.Commands {
+		_, err := sb.WriteString(fmt.Sprintf("RUN %s\n", command))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	bytes := []byte(sb.String());
+	name := "Dockerfile.dockbox"
+	err = ioutil.WriteFile(path.Join(dirPath, "Dockerfile.dockbox"), bytes, 0644)
+
+	if (err != nil) {
+		return "", err
+	}
+
+	return name, nil
+}
+
+func buildImage(dirPath string, dockerFileName string, dockerClient *client.Client) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*240)
+	defer cancel()
+
+	tar, err := archive.TarWithOptions(dirPath, &archive.TarOptions{})
+	if err != nil {
+		return "", err
+	}
+	imageName := "dockbox/" + strings.ToLower(filepath.Base(dirPath))
+	opts := types.ImageBuildOptions{
+		Dockerfile: dockerFileName,
+		Tags:       []string{imageName},
+	}
+	res, err := dockerClient.ImageBuild(ctx, tar, opts)
+	if err != nil {
+		return "", err
+	}
+
+	defer res.Body.Close()
+
+	scanner := bufio.NewScanner(res.Body)
+	for scanner.Scan() {
+		_ = scanner.Text()
+		fmt.Println(scanner.Text())
+	}
+	return imageName, err
+}
+
+
+func runContainer(imageName string, dockerClient *client.Client, command string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	defer cancel()
+
+	resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
+		Image: imageName,
+		AttachStdin: true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd: []string{command},        
+	}, nil, nil, nil, "")
+	if err != nil {
+		return "", err
+	}
+
+	if err := dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		return "", err
+	}
+	return resp.ID, nil
 }
 
 func init() {
 	rootCmd.AddCommand(createCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
 	createCmd.PersistentFlags().StringP("dockerfile", "d", "", "Use this option to set a dockerfile")
 	createCmd.PersistentFlags().BoolP("keep", "k", false, "Keeps code and artifacts")
 	createCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
