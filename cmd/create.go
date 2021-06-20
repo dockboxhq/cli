@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"fmt"
 	"context"
-	"time"
 	"bufio"
 
 	// "io"
@@ -33,7 +32,11 @@ import (
 	
 	"github.com/spf13/cobra"
 
+	"github.com/moby/term"
+
+
 	"github.com/go-git/go-git/v5"
+	
 
 	// "github.com/mitchellh/go-homedir"
 	"github.com/docker/docker/api/types"
@@ -49,7 +52,7 @@ import (
 var createCmd = &cobra.Command{
 	Use:   "create <URL to repository> [path-to-directory]",
 	Short: "Creates a dockbox from URL/file or git clone",
-	Long: `Use git create to create a new dockbox.`,
+	Long: `Use dockbox create to create a new dockbox.`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		targetURL := args[0]
@@ -67,17 +70,14 @@ var createCmd = &cobra.Command{
 
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		common.CheckError(err)
+
 		log.Println("Building image...")
 		imageName, err := buildImage(clonePath, dockerFileName, cli)
 		common.CheckError(err)
 		log.Printf("Successfully created new dockbox: %s\n", imageName)
-		
-		// command, err := common.GetUserString("Run a command: ")
-		// common.CheckError(err)
-		
-		// _, err = runContainer(imageName, cli, command)
-		// common.CheckError(err)
 
+		_, err = runContainer(imageName, cli)
+		common.CheckError(err)
 		
 	},
 }
@@ -191,6 +191,13 @@ func createDockerFileForLanguage(dirPath string, language constants.Image) (stri
 		}
 	}
 
+	if len(language.EntryPoint) > 0 {
+		_, err = sb.WriteString(fmt.Sprintf("ENTRYPOINT %s\n", language.EntryPoint))
+		if err != nil {
+			return "", err
+		}
+	}
+
 	bytes := []byte(sb.String());
 	name := "Dockerfile.dockbox"
 	err = ioutil.WriteFile(path.Join(dirPath, "Dockerfile.dockbox"), bytes, 0644)
@@ -203,7 +210,7 @@ func createDockerFileForLanguage(dirPath string, language constants.Image) (stri
 }
 
 func buildImage(dirPath string, dockerFileName string, dockerClient *client.Client) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*240)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	tar, err := archive.TarWithOptions(dirPath, &archive.TarOptions{})
@@ -231,25 +238,64 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 }
 
 
-func runContainer(imageName string, dockerClient *client.Client, command string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+func runContainer(imageName string, dockerClient *client.Client) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
+	createResponse, errCreate := dockerClient.ContainerCreate(ctx, &container.Config{
 		Image: imageName,
 		AttachStdin: true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd: []string{command},        
+		Tty:   true,
+		OpenStdin: true,       
 	}, nil, nil, nil, "")
-	if err != nil {
-		return "", err
+	if errCreate != nil {
+		return "", errCreate
 	}
 
-	if err := dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		return "", err
+	attachRes, errAttach := dockerClient.ContainerAttach(ctx, createResponse.ID, types.ContainerAttachOptions{
+		Stream: true,
+		Stdin: true,
+		Stdout: true,
+		Stderr: true,
+	})
+	
+	if errAttach != nil {
+		return "", errAttach
 	}
-	return resp.ID, nil
+	streamer := common.SetUpStreamer(attachRes)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- func() error {
+
+			if errHijack := streamer.Stream(ctx); errHijack != nil {
+				return errHijack
+			}
+			return errAttach
+		}()
+	}()
+
+
+	if errStart := dockerClient.ContainerStart(ctx, createResponse.ID, types.ContainerStartOptions{}); errStart != nil {
+		<-errCh
+		return "", errStart
+	}
+
+	if errCh != nil {
+		if err := <-errCh; err != nil {
+			if _, ok := err.(term.EscapeError); ok {
+				// The user entered the detach escape sequence.
+				return "", nil
+			}
+
+			log.Printf("Error hijack: %s", err)
+			return "", err
+		}
+	}
+
+	return createResponse.ID, nil
 }
 
 func init() {

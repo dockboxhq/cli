@@ -5,6 +5,8 @@ import (
 	"sort"
 )
 
+const PREFIX = "dockbox"
+
 func CheckError(err error) {
 	if (err == nil) {
 		return

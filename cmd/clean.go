@@ -16,36 +16,54 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"strings"
+	"log"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
+	"github.com/sriharivishnu/dockbox/cmd/common"
 
 	"github.com/spf13/cobra"
 )
+var dockboxName = ""
 
 // cleanCmd represents the clean command
 var cleanCmd = &cobra.Command{
-	Use:   "clean",
+	Use:   "clean [path]",
 	Short: "Removes all dockboxes on your machine",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Long: `Clean up your machine! Get rid of all the dockboxes on your system`,
+	Run: func(cmd *cobra.Command , args []string) {
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		ctx := context.Background()
+		common.CheckError(err)
+		if len(dockboxName) > 0 {
+			_, err := cli.ImageRemove(ctx,common.PREFIX + "/" + dockboxName, types.ImageRemoveOptions{})
+			common.CheckError(err)
+			fmt.Println("Successfully deleted dockbox: " + dockboxName)
+			return
+		}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("clean called")
+		images, err := cli.ImageList(ctx, types.ImageListOptions{})
+		common.CheckError(err)
+
+		for _, image := range images {
+			if len(image.RepoTags) == 0 {
+				continue
+			}
+			if (strings.HasPrefix(image.RepoTags[0], common.PREFIX)) {
+				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+				common.CheckError(err)
+				log.Printf("Deleted dockbox: %s", image.RepoTags[0])
+			}
+		}
 	},
+	Args: cobra.MaximumNArgs(1),
 }
 
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// cleanCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// cleanCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	cleanCmd.PersistentFlags().StringVarP(&dockboxName, "name", "n", "", "Clean a specific dockbox by name")
 }
