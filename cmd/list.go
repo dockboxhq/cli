@@ -20,50 +20,51 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"text/tabwriter"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
-	"github.com/sriharivishnu/dockbox/cmd/common"
 )
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "List all your dockboxes on your system",
+	Long: `Use this command to list out your dockboxes on the system. 
+It will also show the running dockboxes if there are any running.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)
-		common.CheckError(err)
+		CheckError(err)
 
 		containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
-		common.CheckError(err)
+		CheckError(err)
 
 		images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
-		common.CheckError(err)
-		
+		CheckError(err)
+
+		w := tabwriter.NewWriter(os.Stdout,1, 1, 2, ' ', 0)
 		if len(containers) > 0 {
-			fmt.Print("Running\n")
+			fmt.Print("RUNNING\n-----------\n")
+			fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
 			for _, container := range containers {
-				fmt.Printf("> %s %s Status: %s\n", container.ID[:10], container.Image, container.Status)
+				fmt.Fprintf(w, "%s\t%s\t%s\n", container.ID[:10], container.Image, container.Status)
 			}
-			fmt.Println("-----------")
+			w.Flush()
+			fmt.Println("----------------")
 		}
 
-		fmt.Print("dockboxes:\n")
+		fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
 		for _, image := range images {
-			if len(image.RepoTags) > 0 && strings.HasPrefix(image.RepoTags[0], common.PREFIX) {
-				boxName := image.RepoTags[0][len(common.PREFIX) + 1:]
+			if len(image.RepoTags) > 0 && strings.HasPrefix(image.RepoTags[0], PREFIX) {
+				boxName := image.RepoTags[0][len(PREFIX) + 1:]
 				boxName = boxName[:strings.Index(boxName, ":")]
-				fmt.Printf("> %v (%d MB)	%s\n", boxName, image.Size / 1000000, time.Unix(image.Created, 0))
+				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size / 1000000, time.Unix(image.Created, 0))
 			}
 		}
+		w.Flush()
 		
 	},
 }

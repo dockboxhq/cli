@@ -23,7 +23,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
-	"github.com/sriharivishnu/dockbox/cmd/common"
 
 	"github.com/spf13/cobra"
 )
@@ -37,24 +36,24 @@ var cleanCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command , args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		ctx := context.Background()
-		common.CheckError(err)
+		CheckError(err)
 		if len(dockboxName) > 0 {
-			_, err := cli.ImageRemove(ctx,common.PREFIX + "/" + dockboxName, types.ImageRemoveOptions{})
-			common.CheckError(err)
+			_, err := cli.ImageRemove(ctx, PREFIX + "/" + dockboxName, types.ImageRemoveOptions{})
+			CheckError(err)
 			fmt.Println("Successfully deleted dockbox: " + dockboxName)
 			return
 		}
 
 		images, err := cli.ImageList(ctx, types.ImageListOptions{})
-		common.CheckError(err)
+		CheckError(err)
 
 		for _, image := range images {
 			if len(image.RepoTags) == 0 {
 				continue
 			}
-			if (strings.HasPrefix(image.RepoTags[0], common.PREFIX)) {
+			if (strings.HasPrefix(image.RepoTags[0], PREFIX)) {
 				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
-				common.CheckError(err)
+				CheckError(err)
 				log.Printf("Deleted dockbox: %s", image.RepoTags[0])
 			}
 		}

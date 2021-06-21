@@ -1,4 +1,4 @@
-package common
+package cmd
 import (
 	"fmt"
 	"strings"
@@ -18,7 +18,7 @@ import (
 func GetUserBoolean(prompt string, a ...interface{}) (bool, error) { 
 	var input string
 	for {
-		fmt.Printf(prompt, a...)
+		fmt.Printf(prompt + " [y/n] ", a...)
 		_, err := fmt.Scanf("%s", &input)
 		if (err != nil) {
 			return false, err

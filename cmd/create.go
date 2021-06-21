@@ -37,47 +37,56 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	
+	"github.com/spf13/viper"
 
 	// "github.com/mitchellh/go-homedir"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
-
-	"github.com/sriharivishnu/dockbox/cmd/common"
-	"github.com/sriharivishnu/dockbox/cmd/constants"
 )
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
-	Use:   "create <URL to repository> [path-to-directory]",
+	Use:   "create [URL to repository] [path-to-directory]",
 	Short: "Creates a dockbox from URL/file or git clone",
 	Long: `Use dockbox create to create a new dockbox.`,
-	Args: cobra.RangeArgs(1, 2),
+	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		targetURL := args[0]
-		repoURL, err := url.Parse(targetURL)
-		common.CheckError(err)
-
-		clonePath := path.Base(repoURL.Path)
-		if (len(args) > 1) {
-			clonePath = args[1]
+		dirPath := "."
+		if len(args) == 0 {
+			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+			dirPath = "../" + filepath.Base(dir)
+			CheckError(err)
+		} else {
+			targetURL := args[0]
+			repoURL, err := url.Parse(targetURL)
+			CheckError(err)
+	
+			dirPath = path.Base(repoURL.Path)
+			if (len(args) > 1) {
+				dirPath = args[1]
+			}
+			cloneRepository(targetURL, dirPath)
 		}
 
-		cloneRepository(targetURL, clonePath)
-		dockerFileName, err := getDockerfile(clonePath)
-		common.CheckError(err)
+		dockerFileName, err := getDockerfile(dirPath)
+		CheckError(err)
 
 		cli, err := client.NewClientWithOpts(client.FromEnv)
-		common.CheckError(err)
+		CheckError(err)
 
 		log.Println("Building image...")
-		imageName, err := buildImage(clonePath, dockerFileName, cli)
-		common.CheckError(err)
+		imageName, err := buildImage(dirPath, dockerFileName, cli)
+		CheckError(err)
 		log.Printf("Successfully created new dockbox: %s\n", imageName)
+		
+		viper.Set("image", imageName)
+		viper.Set("Dockerfile", dockerFileName)
+		viper.WriteConfigAs(dirPath + "/.dockbox.yaml")
 
-		_, err = runContainer(imageName, cli)
-		common.CheckError(err)
+		_, err = RunContainer(imageName, cli)
+		CheckError(err)
 		
 	},
 }
@@ -89,14 +98,14 @@ func cloneRepository(url string, path string) {
 		Progress: os.Stdout,
 	})
 
-	common.CheckError(err)
+	CheckError(err)
 }
 
 
 func getDockerfile(dirPath string) (string, error) {
 	log.Println("Creating dockbox...")
 	files, err := ioutil.ReadDir(dirPath)
-    common.CheckError(err)
+    CheckError(err)
 	r, _ := regexp.Compile("(?i)(dockerfile)")
     for _, f := range files {
 		if (!f.IsDir() && r.MatchString(f.Name())) {
@@ -108,7 +117,7 @@ func getDockerfile(dirPath string) (string, error) {
 	log.Println("Could not find Dockerfile in root directory of repository. Generating one for you...")
 	name, err := generateDockerfile(dirPath)
 	// cli, err := client.NewClientWithOpts(client.FromEnv)
-	// 	common.CheckError(err)
+	// 	CheckError(err)
 	return name, err
 
 }
@@ -128,7 +137,7 @@ func generateDockerfile(dirPath string) (string, error) {
 			if err != nil {
 				return err
 			}
-			for _, rstring := range constants.IgnoredFilesForAnalysis {
+			for _, rstring := range IgnoredFilesForAnalysis {
 				matches, _ := regexp.MatchString(rstring, path)
 				if matches {
 					return nil
@@ -137,21 +146,21 @@ func generateDockerfile(dirPath string) (string, error) {
 			log.Println(path, info.Size())
 			if !info.IsDir() {
 				file_extension := filepath.Ext(info.Name())
-				language_name := constants.ExtensionToLanguage[file_extension]
+				language_name := ExtensionToLanguage[file_extension]
 				if len(language_name) > 0 {
 					stats[language_name] += 1
 				}
 			}
 			return nil
 		})
-	common.CheckError(err)
+	CheckError(err)
 	log.Println(stats)
-	sorted := common.SortMap(stats)
+	sorted := SortMap(stats)
 	log.Println(sorted)
 
 	var chosenLanguage string = ""
 	for i := len(sorted) - 1; i >= 0 ; i-- {
-		res, _ := common.GetUserBoolean("Found language: '%s'. Generate Dockerfile for this language? ", sorted[i].Key)
+		res, _ := GetUserBoolean("Found language: '%s'. Generate Dockerfile for this language? ", sorted[i].Key)
 		if (res) {
 			chosenLanguage = sorted[i].Key
 			break
@@ -162,11 +171,11 @@ func generateDockerfile(dirPath string) (string, error) {
 		chosenLanguage = "unknown"
 	}
 
-	log.Printf("Found Image: %s", constants.LanguageToImageMapper[chosenLanguage])
-	return createDockerFileForLanguage(dirPath, constants.LanguageToImageMapper[chosenLanguage])
+	log.Printf("Found Image: %s", LanguageToImageMapper[chosenLanguage])
+	return createDockerFileForLanguage(dirPath, LanguageToImageMapper[chosenLanguage])
 }
 
-func createDockerFileForLanguage(dirPath string, language constants.Image) (string, error) {
+func createDockerFileForLanguage(dirPath string, language Image) (string, error) {
 	var sb strings.Builder
 
 	_, err := sb.WriteString(fmt.Sprintf("FROM %s\n", language.Image))
@@ -198,10 +207,16 @@ func createDockerFileForLanguage(dirPath string, language constants.Image) (stri
 		}
 	}
 
-	bytes := []byte(sb.String());
-	name := "Dockerfile.dockbox"
-	err = ioutil.WriteFile(path.Join(dirPath, "Dockerfile.dockbox"), bytes, 0644)
+	dockerFileBytes := []byte(sb.String());
+	name := ".Dockerfile.dockbox"
+	err = ioutil.WriteFile(path.Join(dirPath, name), dockerFileBytes, 0644)
 
+	if (err != nil) {
+		return "", err
+	}
+
+	dockerIgnoreFileBytes := []byte(name + "\n" + ".dockerignore.dockbox")
+	err = ioutil.WriteFile(path.Join(dirPath, ".dockerignore.dockbox"), dockerIgnoreFileBytes, 0644)
 	if (err != nil) {
 		return "", err
 	}
@@ -217,7 +232,7 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 	if err != nil {
 		return "", err
 	}
-	imageName := "dockbox/" + strings.ToLower(filepath.Base(dirPath))
+	imageName := PREFIX + "/" + strings.ToLower(filepath.Base(dirPath))
 	opts := types.ImageBuildOptions{
 		Dockerfile: dockerFileName,
 		Tags:       []string{imageName},
@@ -238,7 +253,7 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 }
 
 
-func runContainer(imageName string, dockerClient *client.Client) (string, error) {
+func RunContainer(imageName string, dockerClient *client.Client) (string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -264,7 +279,7 @@ func runContainer(imageName string, dockerClient *client.Client) (string, error)
 	if errAttach != nil {
 		return "", errAttach
 	}
-	streamer := common.SetUpStreamer(attachRes)
+	streamer := SetUpStreamer(attachRes)
 	errCh := make(chan error, 1)
 
 	go func() {
