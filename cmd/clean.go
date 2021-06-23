@@ -26,7 +26,14 @@ import (
 
 	"github.com/spf13/cobra"
 )
-var dockboxName = ""
+
+type cleanConfig struct {
+	dockboxName 	string
+	confirmBefore 	bool
+	keepFolder 		bool
+}
+
+var config = cleanConfig{}
 
 // cleanCmd represents the clean command
 var cleanCmd = &cobra.Command{
@@ -37,10 +44,10 @@ var cleanCmd = &cobra.Command{
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		ctx := context.Background()
 		CheckError(err)
-		if len(dockboxName) > 0 {
-			_, err := cli.ImageRemove(ctx, PREFIX + "/" + dockboxName, types.ImageRemoveOptions{})
+		if len(config.dockboxName) > 0 {
+			_, err := cli.ImageRemove(ctx, PREFIX + "/" + config.dockboxName, types.ImageRemoveOptions{})
 			CheckError(err)
-			fmt.Println("Successfully deleted dockbox: " + dockboxName)
+			fmt.Println("Successfully deleted dockbox: " + config.dockboxName)
 			return
 		}
 
@@ -64,5 +71,7 @@ var cleanCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 
-	cleanCmd.PersistentFlags().StringVarP(&dockboxName, "name", "n", "", "Clean a specific dockbox by name")
+	cleanCmd.PersistentFlags().StringVarP(&config.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
+	cleanCmd.PersistentFlags().BoolVarP(&config.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
+	cleanCmd.PersistentFlags().BoolVarP(&config.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
 }

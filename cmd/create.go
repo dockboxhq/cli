@@ -39,6 +39,8 @@ import (
 	
 	"github.com/spf13/viper"
 
+	"github.com/karrick/godirwalk"
+
 	// "github.com/mitchellh/go-homedir"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -130,29 +132,32 @@ func generateDockerfile(dirPath string) (string, error) {
 		return "", err
 	}
 	stats := make(map[string]int)
-
-	// Walk directory
-	err = filepath.Walk(dirPath,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			for _, rstring := range IgnoredFilesForAnalysis {
-				matches, _ := regexp.MatchString(rstring, path)
-				if matches {
-					return nil
+	godirwalk.Walk(dirPath, 
+		&godirwalk.Options{
+			Callback: func(osPathname string, d *godirwalk.Dirent) error {
+				for _, rstring := range IgnoredFilesForAnalysis {
+					matches, _ := regexp.MatchString(rstring, osPathname)
+					if matches {
+						return godirwalk.SkipThis
+					}
 				}
-			}
-			log.Println(path, info.Size())
-			if !info.IsDir() {
-				file_extension := filepath.Ext(info.Name())
-				language_name := ExtensionToLanguage[file_extension]
-				if len(language_name) > 0 {
-					stats[language_name] += 1
+				log.Println(osPathname, d.Name())
+				if !d.IsDir() {
+					file_extension := filepath.Ext(d.Name())
+					language_name := ExtensionToLanguage[file_extension]
+					if len(language_name) > 0 {
+						stats[language_name] += 1
+					}
 				}
-			}
-			return nil
-		})
+				return nil
+			},
+			ErrorCallback: func(path string, err error) godirwalk.ErrorAction {
+				log.Printf("Error accessing file: %s", path)
+				return godirwalk.SkipNode
+			},
+			Unsorted: true,
+		},
+	)
 	CheckError(err)
 	log.Println(stats)
 	sorted := SortMap(stats)

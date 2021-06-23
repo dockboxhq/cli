@@ -18,12 +18,17 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
-	"text/tabwriter"
 	"os"
+	"path/filepath"
+	"strings"
+	"text/tabwriter"
+	"time"
+	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
+	"github.com/karrick/godirwalk"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -31,54 +36,83 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "list [path]",
 	Short: "List all your dockboxes on your system",
 	Long: `Use this command to list out your dockboxes on the system. 
 It will also show the running dockboxes if there are any running.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		CheckError(err)
+		filterImages := map[string]bool{}
+		getDockboxesFromPaths(filterImages, args...)
+		printGlobalDockboxes(filterImages, len(args) > 0)
+	},
+}
 
-		containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
-		CheckError(err)
+func printGlobalDockboxes(foundImages map[string]bool, findInPath bool) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	CheckError(err)
 
-		images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
-		CheckError(err)
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	CheckError(err)
 
-		w := tabwriter.NewWriter(os.Stdout,1, 1, 2, ' ', 0)
-		if len(containers) > 0 {
-			fmt.Print("RUNNING\n-----------\n")
-			fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
-			for _, container := range containers {
+	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
+	CheckError(err)
+
+	w := tabwriter.NewWriter(os.Stdout,1, 1, 2, ' ', 0)
+	if len(containers) > 0 {
+		fmt.Print("RUNNING\n-----------\n")
+		fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
+		for _, container := range containers {
+			if _, ok := foundImages[container.Image]; (findInPath && ok) || !findInPath {
 				fmt.Fprintf(w, "%s\t%s\t%s\n", container.ID[:10], container.Image, container.Status)
-			}
-			w.Flush()
-			fmt.Println("----------------")
-		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
-		for _, image := range images {
-			if len(image.RepoTags) > 0 && strings.HasPrefix(image.RepoTags[0], PREFIX) {
-				boxName := image.RepoTags[0][len(PREFIX) + 1:]
-				boxName = boxName[:strings.Index(boxName, ":")]
-				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size / 1000000, time.Unix(image.Created, 0))
 			}
 		}
 		w.Flush()
-		
-	},
+		fmt.Println("----------------")
+	}
+
+	fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
+	for _, image := range images {
+		if len(image.RepoTags) > 0 && strings.HasPrefix(image.RepoTags[0], PREFIX) {
+			boxName := image.RepoTags[0][len(PREFIX) + 1:]
+			boxName = boxName[:strings.Index(boxName, ":")]
+			if _, ok := foundImages[PREFIX +"/"+ boxName]; (findInPath && ok) || !findInPath {
+				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size / 1000000, time.Unix(image.Created, 0))
+			}
+		}
+	}
+	w.Flush()
+}
+
+func getDockboxesFromPaths(foundImages map[string]bool, paths ...string) {
+	for _, path := range paths {
+		godirwalk.Walk(path, &godirwalk.Options{
+			Callback: func(osPathname string, d *godirwalk.Dirent) error {
+				if d.Name() == ".dockbox.yaml" {
+					file, err := os.Open(osPathname)
+					if err != nil {
+						log.Printf("Warning: Unable to read file at: %s %s", osPathname, err)
+						return nil;
+					}
+					viper.SetConfigType("yaml")
+					errViper := viper.ReadConfig(file)
+					if errViper != nil {
+						log.Printf("Warning: Unable to read file at: %s", osPathname)
+						return nil;
+					}
+					foundImages[viper.GetString("image")] = true
+				}
+				return nil
+			},
+			ErrorCallback: func(path string, err error) godirwalk.ErrorAction {
+				log.Printf("Error accessing file: %s", path)
+				return godirwalk.SkipNode
+			},
+			Unsorted: true,
+		})
+	}
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// listCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// listCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
