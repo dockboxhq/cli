@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/viper"
 	"github.com/docker/docker/client"
+	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
 )

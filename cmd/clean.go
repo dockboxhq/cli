@@ -18,7 +18,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strings"
 	"log"
 
 	"github.com/docker/docker/api/types"
@@ -28,9 +27,9 @@ import (
 )
 
 type cleanConfig struct {
-	dockboxName 	string
-	confirmBefore 	bool
-	keepFolder 		bool
+	dockboxName   string
+	confirmBefore bool
+	keepFolder    bool
 }
 
 var config = cleanConfig{}
@@ -39,13 +38,16 @@ var config = cleanConfig{}
 var cleanCmd = &cobra.Command{
 	Use:   "clean [path]",
 	Short: "Removes all dockboxes on your machine",
-	Long: `Clean up your machine! Get rid of all the dockboxes on your system`,
-	Run: func(cmd *cobra.Command , args []string) {
+	Long:  `Clean up your machine! Get rid of all the dockboxes on your system`,
+	Run: func(cmd *cobra.Command, args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		ctx := context.Background()
 		CheckError(err)
+
+		imageToContainer := map[string][]string{}
+		populateImageToContainer(ctx, cli, imageToContainer)
 		if len(config.dockboxName) > 0 {
-			_, err := cli.ImageRemove(ctx, PREFIX + "/" + config.dockboxName, types.ImageRemoveOptions{})
+			_, err := cli.ImageRemove(ctx, dockboxNameToImageName(config.dockboxName), types.ImageRemoveOptions{})
 			CheckError(err)
 			fmt.Println("Successfully deleted dockbox: " + config.dockboxName)
 			return
@@ -58,7 +60,7 @@ var cleanCmd = &cobra.Command{
 			if len(image.RepoTags) == 0 {
 				continue
 			}
-			if (strings.HasPrefix(image.RepoTags[0], PREFIX)) {
+			if isImageDockbox(image.RepoTags[0]) {
 				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
 				CheckError(err)
 				log.Printf("Deleted dockbox: %s", image.RepoTags[0])
@@ -66,6 +68,17 @@ var cleanCmd = &cobra.Command{
 		}
 	},
 	Args: cobra.MaximumNArgs(1),
+}
+
+func populateImageToContainer(ctx context.Context, cli *client.Client, imageToContainer map[string][]string) error {
+	_, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		return err
+	}
+	// for _, container := range containers {
+
+	// }
+	return nil
 }
 
 func init() {

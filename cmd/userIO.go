@@ -1,26 +1,29 @@
 package cmd
+
 import (
-	"fmt"
-	"strings"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/streams"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/docker/cli/cli/streams"
 	"github.com/moby/term"
 )
-func GetUserBoolean(prompt string, a ...interface{}) (bool, error) { 
+
+func GetUserBoolean(prompt string, a ...interface{}) (bool, error) {
 	var input string
 	for {
-		fmt.Printf(prompt + " [y/n] ", a...)
+		fmt.Printf(prompt+" [y/n] ", a...)
 		_, err := fmt.Scanf("%s", &input)
-		if (err != nil) {
+		if err != nil {
 			return false, err
 		}
 		input = strings.Trim(input, "\n")
@@ -38,17 +41,25 @@ func GetUserString(prompt string, a ...interface{}) (string, error) {
 	var input string
 	fmt.Printf(prompt, a...)
 	_, err := fmt.Scanf("%s", &input)
-	if (err != nil) {
+	if err != nil {
 		return "", err
 	}
 	input = strings.Trim(input, "\n")
 	return input, nil
 }
 
-type myStreams struct{
-	in *streams.In
-    out *streams.Out
-    err io.Writer
+func PrintJSONBuildStatus(jsonText string) {
+	var result map[string]interface{}
+	json.Unmarshal([]byte(jsonText), &result)
+	if val, ok := result["status"]; ok {
+		fmt.Print(val)
+	}
+}
+
+type myStreams struct {
+	in  *streams.In
+	out *streams.Out
+	err io.Writer
 }
 
 func (s myStreams) In() *streams.In {
@@ -91,7 +102,7 @@ type hijackedIOStreamer struct {
 
 	resp types.HijackedResponse
 
-	tty        bool
+	tty bool
 }
 
 // stream handles setting up the IO and then begins streaming stdin/stdout

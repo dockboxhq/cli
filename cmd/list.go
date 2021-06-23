@@ -18,12 +18,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
-	"path/filepath"
-	"strings"
 	"text/tabwriter"
 	"time"
-	"log"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,7 +34,7 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list [path]",
+	Use:   "list [paths...]",
 	Short: "List all your dockboxes on your system",
 	Long: `Use this command to list out your dockboxes on the system. 
 It will also show the running dockboxes if there are any running.`,
@@ -57,7 +55,7 @@ func printGlobalDockboxes(foundImages map[string]bool, findInPath bool) {
 	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
 	CheckError(err)
 
-	w := tabwriter.NewWriter(os.Stdout,1, 1, 2, ' ', 0)
+	w := tabwriter.NewWriter(os.Stdout, 1, 1, 2, ' ', 0)
 	if len(containers) > 0 {
 		fmt.Print("RUNNING\n-----------\n")
 		fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
@@ -72,11 +70,10 @@ func printGlobalDockboxes(foundImages map[string]bool, findInPath bool) {
 
 	fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
 	for _, image := range images {
-		if len(image.RepoTags) > 0 && strings.HasPrefix(image.RepoTags[0], PREFIX) {
-			boxName := image.RepoTags[0][len(PREFIX) + 1:]
-			boxName = boxName[:strings.Index(boxName, ":")]
-			if _, ok := foundImages[PREFIX +"/"+ boxName]; (findInPath && ok) || !findInPath {
-				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size / 1000000, time.Unix(image.Created, 0))
+		if len(image.RepoTags) > 0 && isImageDockbox(image.RepoTags[0]) {
+			boxName := repoTagToDockboxName(image.RepoTags[0])
+			if _, ok := foundImages[dockboxNameToImageName(boxName)]; (findInPath && ok) || !findInPath {
+				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0))
 			}
 		}
 	}
@@ -91,13 +88,13 @@ func getDockboxesFromPaths(foundImages map[string]bool, paths ...string) {
 					file, err := os.Open(osPathname)
 					if err != nil {
 						log.Printf("Warning: Unable to read file at: %s %s", osPathname, err)
-						return nil;
+						return nil
 					}
 					viper.SetConfigType("yaml")
 					errViper := viper.ReadConfig(file)
 					if errViper != nil {
 						log.Printf("Warning: Unable to read file at: %s", osPathname)
-						return nil;
+						return nil
 					}
 					foundImages[viper.GetString("image")] = true
 				}
