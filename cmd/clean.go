@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -46,8 +47,18 @@ var cleanCmd = &cobra.Command{
 
 		imageToContainer := map[string][]string{}
 		populateImageToContainer(ctx, cli, imageToContainer)
+		CheckError(err)
+
 		if len(config.dockboxName) > 0 {
-			_, err := cli.ImageRemove(ctx, dockboxNameToImageName(config.dockboxName), types.ImageRemoveOptions{})
+			imageName := dockboxNameToImageName(config.dockboxName)
+			deleteImageAndParents(ctx, cli, imageName)
+			info, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+			CheckError(err)
+			log.Printf("Found image ID: %s", info.ID)
+			err = removeContainersForImage(ctx, cli, imageToContainer, imageName)
+			CheckError(err)
+
+			err = deleteImageAndParents(ctx, cli, imageName)
 			CheckError(err)
 			fmt.Println("Successfully deleted dockbox: " + config.dockboxName)
 			return
@@ -61,7 +72,10 @@ var cleanCmd = &cobra.Command{
 				continue
 			}
 			if isImageDockbox(image.RepoTags[0]) {
-				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+				// Remove dependent containers before deleting image
+				log.Printf("Removing containers for image %s", image.RepoTags[0])
+				removeContainersForImage(ctx, cli, imageToContainer, image.ID)
+				err = deleteImageAndParents(ctx, cli, image.ID)
 				CheckError(err)
 				log.Printf("Deleted dockbox: %s", image.RepoTags[0])
 			}
@@ -71,14 +85,67 @@ var cleanCmd = &cobra.Command{
 }
 
 func populateImageToContainer(ctx context.Context, cli *client.Client, imageToContainer map[string][]string) error {
-	_, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	log.Printf("Populating image to container map...")
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
 		return err
 	}
-	// for _, container := range containers {
-
-	// }
+	for _, container := range containers {
+		if isImageDockbox(container.Image) {
+			log.Printf("Found dockbox: %s %s", container.ImageID, container.Image)
+			imageToContainer[container.ImageID] = append(imageToContainer[container.ImageID], container.ID)
+			imageToContainer[container.Image] = append(imageToContainer[container.Image], container.ID)
+		}
+	}
 	return nil
+}
+
+func removeContainersForImage(ctx context.Context, cli *client.Client, imageToContainer map[string][]string, imageID string) error {
+	for _, containerID := range imageToContainer[imageID] {
+		err := cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{})
+		log.Printf("Removing container: %s", containerID)
+		if err != nil {
+			fmt.Printf("Error deleting container: %s\n", err)
+		}
+	}
+	return nil
+}
+
+func deleteImageAndParents(ctx context.Context, cli *client.Client, imageName string) error {
+	imageHistory, err := cli.ImageHistory(ctx, imageName)
+	CheckError(err)
+	for _, item := range imageHistory {
+		if item.ID == "<missing>" {
+			break
+		}
+		// Ask for user confirmation for named repositories
+		if len(item.Tags) > 0 {
+			res, err := GetUserBoolean("Delete parent image: %s %s?", item.Tags[0], item.ID)
+			if err != nil {
+				return err
+			}
+			if !res {
+				break
+			}
+		}
+		_, err = cli.ImageRemove(ctx, item.ID, types.ImageRemoveOptions{Force: true, PruneChildren: true})
+		if err != nil && !strings.HasPrefix(err.Error(), "Error: No such image:") {
+			log.Printf("Error while deleting: %s %v", item.ID, item.Tags)
+			return err
+		}
+		log.Printf("Deleted image: %s %v\n", item.ID, item.Tags)
+	}
+	return nil
+	// Alternative method
+	// fmt.Println("Starting parent search")
+	// for image != "" {
+	// 	tempImage, _, err := cli.ImageInspectWithRaw(ctx, image)
+	// 	CheckError(err)
+	// 	fmt.Printf("%s %v\n", tempImage.ID, tempImage.RepoTags)
+	// 	image = tempImage.Parent
+	// }
+	// fmt.Println("Finished parent search")
+
 }
 
 func init() {

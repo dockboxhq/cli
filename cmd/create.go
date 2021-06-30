@@ -55,6 +55,9 @@ var createCmd = &cobra.Command{
 	Long:  `Use dockbox create to create a new dockbox.`,
 	Args:  cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		CheckError(err)
+
 		dirPath := "."
 		if len(args) == 0 {
 			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
@@ -71,11 +74,9 @@ var createCmd = &cobra.Command{
 			}
 			cloneRepository(targetURL, dirPath)
 		}
+		os.Mkdir(path.Join(dirPath, HIDDEN_DIRECTORY), 0755)
 
 		dockerFileName, err := getDockerfile(dirPath)
-		CheckError(err)
-
-		cli, err := client.NewClientWithOpts(client.FromEnv)
 		CheckError(err)
 
 		log.Println("Building image...")
@@ -85,7 +86,7 @@ var createCmd = &cobra.Command{
 
 		viper.Set("image", imageName)
 		viper.Set("Dockerfile", dockerFileName)
-		viper.WriteConfigAs(dirPath + "/.dockbox.yaml")
+		viper.WriteConfigAs(path.Join(dirPath, path.Join(HIDDEN_DIRECTORY, ".dockbox.yaml")))
 
 		_, err = RunContainer(imageName, cli)
 		CheckError(err)
@@ -208,20 +209,20 @@ func createDockerFileForLanguage(dirPath string, language Image) (string, error)
 	}
 
 	dockerFileBytes := []byte(sb.String())
-	name := ".Dockerfile.dockbox"
-	err = ioutil.WriteFile(path.Join(dirPath, name), dockerFileBytes, 0644)
-
+	dockerFileName := path.Join(HIDDEN_DIRECTORY, ".Dockerfile.dockbox")
+	err = ioutil.WriteFile(path.Join(dirPath, dockerFileName), dockerFileBytes, 0644)
 	if err != nil {
 		return "", err
 	}
 
-	dockerIgnoreFileBytes := []byte(name + "\n" + ".dockerignore.dockbox")
-	err = ioutil.WriteFile(path.Join(dirPath, ".dockerignore.dockbox"), dockerIgnoreFileBytes, 0644)
+	dockerIgnorePath := path.Join(HIDDEN_DIRECTORY, ".dockerignore.dockbox")
+	dockerIgnoreFileBytes := []byte(dockerFileName + "\n" + dockerIgnorePath)
+	err = ioutil.WriteFile(path.Join(dirPath, dockerIgnorePath), dockerIgnoreFileBytes, 0644)
 	if err != nil {
 		return "", err
 	}
 
-	return name, nil
+	return dockerFileName, nil
 }
 
 func buildImage(dirPath string, dockerFileName string, dockerClient *client.Client) (string, error) {

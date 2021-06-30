@@ -8,6 +8,7 @@ import (
 )
 
 const PREFIX = "dockbox"
+const HIDDEN_DIRECTORY = ".dockbox"
 
 func CheckError(err error) {
 	if err == nil {
