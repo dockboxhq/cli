@@ -86,7 +86,7 @@ var createCmd = &cobra.Command{
 
 		viper.Set("image", imageName)
 		viper.Set("Dockerfile", dockerFileName)
-		viper.WriteConfigAs(path.Join(dirPath, path.Join(HIDDEN_DIRECTORY, ".dockbox.yaml")))
+		viper.WriteConfigAs(path.Join(dirPath, HIDDEN_DIRECTORY, ".dockbox.yaml"))
 
 		_, err = RunContainer(imageName, cli)
 		CheckError(err)

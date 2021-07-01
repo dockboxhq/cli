@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/docker/docker/client"
 	"github.com/spf13/viper"
@@ -37,9 +38,7 @@ to "enter" into the dockbox allowing you to run commands and play around with it
 		if len(args) > 0 {
 			path = args[0]
 		}
-		viper.SetConfigName(".dockbox") // name of config file (without extension)
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath(path)
+		viper.SetConfigFile(filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml"))
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 				fmt.Println("This directory does not contain a dockbox! Please run dockbox create")
