@@ -249,7 +249,8 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 	scanner := bufio.NewScanner(res.Body)
 	for scanner.Scan() {
 		jsonText := scanner.Text()
-		PrintJSONBuildStatus(jsonText)
+		fmt.Println(jsonText)
+		// PrintJSONBuildStatus(jsonText)
 	}
 	return imageName, err
 }
