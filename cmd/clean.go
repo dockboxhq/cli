@@ -148,6 +148,15 @@ func deleteImageAndParents(ctx context.Context, cli *client.Client, imageName st
 
 }
 
+// type ImageNode struct {
+// 	children []*ImageNode
+// }
+
+// func buildImageTree() {
+// 	roots := make([]*ImageNode, 0)
+
+// }
+
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 
