@@ -35,8 +35,6 @@ import (
 
 	"github.com/moby/term"
 
-	"github.com/go-git/go-git/v5"
-
 	"github.com/spf13/viper"
 
 	"github.com/karrick/godirwalk"
@@ -46,12 +44,14 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+
+	getter "github.com/hashicorp/go-getter"
 )
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create [URL to repository] [path-to-directory]",
-	Short: "Creates a dockbox from URL/file or git clone",
+	Short: "Creates a dockbox from a URL, file or git URL",
 	Long:  `Use dockbox create to create a new dockbox.`,
 	Args:  cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -59,34 +59,49 @@ var createCmd = &cobra.Command{
 		CheckError(err)
 
 		dirPath := "."
-		if len(args) == 0 {
+		if len(args) == 0 || args[0] == "." {
 			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 			dirPath = "../" + filepath.Base(dir)
 			CheckError(err)
 		} else {
-			targetURL := args[0]
-			repoURL, err := url.Parse(targetURL)
-			CheckError(err)
+			target := args[0]
+			// Check if path exists
+			if info, err := os.Stat(target); err == nil {
+				if info.IsDir() {
+					dirPath = target
+				} else {
+					panic("Cannot create dockbox from a file")
+				}
+			} else {
+				repoURL, err := url.Parse(target)
+				CheckError(err)
 
-			dirPath = path.Base(repoURL.Path)
-			if len(args) > 1 {
-				dirPath = args[1]
+				dirPath = path.Base(repoURL.Path)
+				if len(args) > 1 {
+					dirPath = args[1]
+				}
+				fmt.Println("Fetching data from source...")
+				getRepositoryData(target, dirPath)
+				fmt.Println("Successfully retrieved data from source")
 			}
-			cloneRepository(targetURL, dirPath)
 		}
 		os.Mkdir(path.Join(dirPath, HIDDEN_DIRECTORY), 0755)
 
+		log.Println("Creating dockbox...")
 		dockerFileName, err := getDockerfile(dirPath)
 		CheckError(err)
 
-		log.Println("Building image...")
+		log.Println("Building dockbox...")
 		imageName, err := buildImage(dirPath, dockerFileName, cli)
 		CheckError(err)
 		log.Printf("Successfully created new dockbox: %s\n", imageName)
 
 		viper.Set("image", imageName)
 		viper.Set("Dockerfile", dockerFileName)
-		viper.WriteConfigAs(path.Join(dirPath, HIDDEN_DIRECTORY, ".dockbox.yaml"))
+		configPath := path.Join(dirPath, HIDDEN_DIRECTORY, ".dockbox.yaml")
+		err = viper.WriteConfigAs(configPath)
+		CheckError(err)
+		log.Printf("Wrote config to %s\n", configPath)
 
 		_, err = RunContainer(imageName, cli)
 		CheckError(err)
@@ -94,17 +109,42 @@ var createCmd = &cobra.Command{
 	},
 }
 
-func cloneRepository(url string, path string) {
-	_, err := git.PlainClone(path, false, &git.CloneOptions{
-		URL:      url,
-		Progress: os.Stdout,
-	})
+func getRepositoryData(url string, path string) {
+	if strings.Contains(url, "github") || strings.Contains(url, "gitlab") && !strings.HasPrefix(url, "git::") {
+		url = "git::" + url
+	}
+	client := &getter.Client{
+		Ctx:  context.Background(),
+		Dst:  path,
+		Src:  url,
+		Mode: getter.ClientModeAny,
+		Detectors: []getter.Detector{
+			&getter.GitHubDetector{},
+			&getter.GitDetector{},
+			&getter.S3Detector{},
+		},
+		//provide the getter needed to download the files
+		Getters: map[string]getter.Getter{
+			"git":   &getter.GitGetter{},
+			"http":  &getter.HttpGetter{},
+			"https": &getter.HttpGetter{},
+		},
+	}
+	if err := client.Get(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error while fetching code from %s: %v", client.Src, err)
+		os.Exit(1)
+	}
 
-	CheckError(err)
+	// _, err := git.PlainClone(path, false, &git.CloneOptions{
+	// 	URL:      url,
+	// 	Progress: os.Stdout,
+	// })
 }
 
 func getDockerfile(dirPath string) (string, error) {
-	log.Println("Creating dockbox...")
+	if _, err := os.Stat(filepath.Join(dirPath, HIDDEN_DIRECTORY, ".Dockerfile.dockbox")); err == nil {
+		return filepath.Join(HIDDEN_DIRECTORY, ".Dockerfile.dockbox"), nil
+	}
 	files, err := ioutil.ReadDir(dirPath)
 	CheckError(err)
 	r, _ := regexp.Compile("(?i)(dockerfile)")

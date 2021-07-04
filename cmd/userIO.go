@@ -86,7 +86,7 @@ func SetUpStreamer(resp types.HijackedResponse) hijackedIOStreamer {
 	return streamer
 }
 
-//https://github.com/docker/cli/blob/master/cli/command/container/hijack.go
+//From: https://github.com/docker/cli/blob/master/cli/command/container/hijack.go
 
 // The default escape key sequence: ctrl-p, ctrl-q
 // TODO: This could be moved to `pkg/term`.
