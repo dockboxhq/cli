@@ -53,7 +53,7 @@ var treeCmd = &cobra.Command{
 }
 
 type ImageNode struct {
-	children []*ImageNode
+	children map[string]*ImageNode
 	name     string
 	ID       string
 }
@@ -62,7 +62,7 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 	var dockboxImages []types.ImageSummary
 	if treeOptions.All {
 		var errorImageList error
-		dockboxImages, errorImageList = cli.ImageList(ctx, types.ImageListOptions{All: true})
+		dockboxImages, errorImageList = cli.ImageList(ctx, types.ImageListOptions{All: false})
 		if errorImageList != nil {
 			return nil, nil, errorImageList
 		}
@@ -78,11 +78,12 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 
 	for i, image := range dockboxImages {
 		leafList[i] = &ImageNode{
-			name: repoTagToDockboxName(image.RepoTags[0]),
-			ID:   image.ID,
+			name:     repoTagToDockboxName(image.RepoTags[0]),
+			ID:       image.ID,
+			children: make(map[string]*ImageNode),
 		}
 		IDtoImageNode[image.ID] = leafList[i]
-		log.Printf("Finding Image History for : %s %v \n", image.ID, image.RepoTags)
+		// log.Printf("Finding Image History for : %s %v \n", image.ID, image.RepoTags)
 		hist, err := cli.ImageHistory(ctx, image.ID)
 		if err != nil {
 			return nil, nil, err
@@ -101,14 +102,15 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 			}
 			if IDtoImageNode[item.ID] == nil {
 				IDtoImageNode[item.ID] = &ImageNode{
-					name: "",
-					ID:   item.ID,
+					name:     "",
+					ID:       item.ID,
+					children: make(map[string]*ImageNode),
 				}
 				if len(item.Tags) > 0 {
 					IDtoImageNode[item.ID].name = repoTagToDockboxName(item.Tags[0])
 				}
 			}
-			IDtoImageNode[item.ID].children = append(IDtoImageNode[item.ID].children, childNode)
+			IDtoImageNode[item.ID].children[childNode.ID] = childNode
 			childNode = IDtoImageNode[item.ID]
 		}
 	}
@@ -131,13 +133,14 @@ func (node *ImageNode) print(sb *strings.Builder, prefix string, childrenPrefix 
 		sb.WriteString(node.name)
 	}
 	sb.WriteString("\n")
-	// log.Printf("%v\n", node.children)
-	for i, child := range node.children {
+	i := 0
+	for _, child := range node.children {
 		if i < len(node.children)-1 {
 			child.print(sb, childrenPrefix+"├── ", childrenPrefix+"│   ")
 		} else {
 			child.print(sb, childrenPrefix+"└── ", childrenPrefix+"    ")
 		}
+		i++
 	}
 }
 
