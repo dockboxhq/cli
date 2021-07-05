@@ -27,13 +27,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type cleanConfig struct {
+type CleanOptions struct {
 	dockboxName   string
 	confirmBefore bool
 	keepFolder    bool
 }
 
-var config = cleanConfig{}
+var cleanCmdOptions = CleanOptions{}
 
 // cleanCmd represents the clean command
 var cleanCmd = &cobra.Command{
@@ -49,8 +49,8 @@ var cleanCmd = &cobra.Command{
 		populateImageToContainer(ctx, cli, imageToContainer)
 		CheckError(err)
 
-		if len(config.dockboxName) > 0 {
-			imageName := dockboxNameToImageName(config.dockboxName)
+		if len(cleanCmdOptions.dockboxName) > 0 {
+			imageName := dockboxNameToImageName(cleanCmdOptions.dockboxName)
 			deleteImageAndParents(ctx, cli, imageName)
 			info, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 			CheckError(err)
@@ -60,7 +60,7 @@ var cleanCmd = &cobra.Command{
 
 			err = deleteImageAndParents(ctx, cli, imageName)
 			CheckError(err)
-			fmt.Println("Successfully deleted dockbox: " + config.dockboxName)
+			fmt.Println("Successfully deleted dockbox: " + cleanCmdOptions.dockboxName)
 			return
 		}
 
@@ -102,10 +102,18 @@ func populateImageToContainer(ctx context.Context, cli *client.Client, imageToCo
 
 func removeContainersForImage(ctx context.Context, cli *client.Client, imageToContainer map[string][]string, imageID string) error {
 	for _, containerID := range imageToContainer[imageID] {
-		err := cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{})
+		errContainerRemove := cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{})
 		log.Printf("Removing container: %s", containerID)
-		if err != nil {
-			fmt.Printf("Error deleting container: %s\n", err)
+		if errContainerRemove != nil {
+			if strings.Contains(errContainerRemove.Error(), "You cannot remove a running container") {
+				cli.ContainerStop(ctx, containerID, nil)
+				errContainerRemove = cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{})
+				if errContainerRemove != nil {
+					return errContainerRemove
+				}
+			} else {
+				return errContainerRemove
+			}
 		}
 	}
 	return nil
@@ -148,19 +156,10 @@ func deleteImageAndParents(ctx context.Context, cli *client.Client, imageName st
 
 }
 
-// type ImageNode struct {
-// 	children []*ImageNode
-// }
-
-// func buildImageTree() {
-// 	roots := make([]*ImageNode, 0)
-
-// }
-
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 
-	cleanCmd.PersistentFlags().StringVarP(&config.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
-	cleanCmd.PersistentFlags().BoolVarP(&config.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
-	cleanCmd.PersistentFlags().BoolVarP(&config.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
+	cleanCmd.PersistentFlags().StringVarP(&cleanCmdOptions.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
+	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
+	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
 }

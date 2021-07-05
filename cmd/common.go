@@ -46,8 +46,13 @@ func SortMap(m map[string]int) []Pair {
 }
 
 func repoTagToDockboxName(repoTag string) string {
+	if !strings.HasPrefix(repoTag, PREFIX) {
+		return repoTag
+	}
 	boxName := repoTag[len(PREFIX)+1:]
-	boxName = boxName[:strings.Index(boxName, ":")]
+	if strings.ContainsRune(boxName, ':') {
+		boxName = boxName[:strings.Index(boxName, ":")]
+	}
 	return boxName
 }
 

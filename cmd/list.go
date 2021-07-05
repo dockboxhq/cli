@@ -32,6 +32,12 @@ import (
 	"github.com/docker/docker/client"
 )
 
+type ListOptions struct {
+	paths []string
+}
+
+var options = ListOptions{}
+
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list [paths...]",
@@ -39,49 +45,95 @@ var listCmd = &cobra.Command{
 	Long: `Use this command to list out your dockboxes on the system. 
 It will also show the running dockboxes if there are any running.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		filterImages := map[string]bool{}
-		getDockboxesFromPaths(filterImages, args...)
-		printGlobalDockboxes(filterImages, len(args) > 0)
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		CheckError(err)
+
+		options.paths = args
+
+		filterImages := getDockboxesFromPaths(options)
+		getDockboxImages(cli, options)
+		printGlobalDockboxes(cli, filterImages, len(args) > 0)
 	},
 }
 
-func printGlobalDockboxes(foundImages map[string]bool, findInPath bool) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	CheckError(err)
+func printGlobalDockboxes(cli *client.Client, foundImages map[string]bool, findInPath bool) {
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
-	CheckError(err)
-
-	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
-	CheckError(err)
+	runningDockboxes := getRunningDockboxImages(cli, options)
 
 	w := tabwriter.NewWriter(os.Stdout, 1, 1, 2, ' ', 0)
-	if len(containers) > 0 {
+	if len(runningDockboxes) > 0 {
 		fmt.Print("RUNNING\n-----------\n")
 		fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
-		for _, container := range containers {
-			if _, ok := foundImages[container.Image]; (findInPath && ok) || !findInPath {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", container.ID[:10], container.Image, container.Status)
-			}
+		for _, container := range runningDockboxes {
+			fmt.Fprintf(w, "%s\t%s\t%s\n", container.ID, repoTagToDockboxName(container.Image), container.Status)
 		}
 		w.Flush()
 		fmt.Println("----------------")
 	}
 
+	dockboxImages := getDockboxImages(cli, options)
 	fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
-	for _, image := range images {
-		if len(image.RepoTags) > 0 && isImageDockbox(image.RepoTags[0]) {
-			boxName := repoTagToDockboxName(image.RepoTags[0])
-			if _, ok := foundImages[dockboxNameToImageName(boxName)]; (findInPath && ok) || !findInPath {
-				fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0))
-			}
-		}
+	for _, image := range dockboxImages {
+		boxName := repoTagToDockboxName(image.RepoTags[0])
+		fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0))
 	}
 	w.Flush()
 }
 
-func getDockboxesFromPaths(foundImages map[string]bool, paths ...string) {
-	for _, path := range paths {
+func getDockboxImages(cli *client.Client, options ListOptions) []types.ImageSummary {
+	filteredByPath := getDockboxesFromPaths(options)
+
+	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
+	CheckError(err)
+
+	dockboxImages := make([]types.ImageSummary, 0)
+
+	for _, image := range images {
+		if len(image.RepoTags) == 0 {
+			continue
+		}
+		if !isImageDockbox(image.RepoTags[0]) {
+			continue
+		}
+
+		boxName := repoTagToDockboxName(image.RepoTags[0])
+
+		if len(options.paths) == 0 {
+			dockboxImages = append(dockboxImages, image)
+		} else {
+			if _, ok := filteredByPath[dockboxNameToImageName(boxName)]; ok {
+				dockboxImages = append(dockboxImages, image)
+			}
+		}
+	}
+
+	return dockboxImages
+}
+
+func getRunningDockboxImages(cli *client.Client, options ListOptions) []types.Container {
+	filteredByPath := getDockboxesFromPaths(options)
+
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	CheckError(err)
+
+	dockboxContainers := make([]types.Container, 0)
+
+	for _, container := range containers {
+		if len(options.paths) == 0 {
+			dockboxContainers = append(dockboxContainers, container)
+		} else {
+			if _, ok := filteredByPath[container.Image]; ok {
+				dockboxContainers = append(dockboxContainers, container)
+			}
+		}
+	}
+
+	return dockboxContainers
+}
+
+func getDockboxesFromPaths(options ListOptions) map[string]bool {
+	foundImages := make(map[string]bool)
+	for _, path := range options.paths {
 		godirwalk.Walk(path, &godirwalk.Options{
 			Callback: func(osPathname string, d *godirwalk.Dirent) error {
 				if d.Name() == ".dockbox.yaml" {
@@ -107,6 +159,7 @@ func getDockboxesFromPaths(foundImages map[string]bool, paths ...string) {
 			Unsorted: true,
 		})
 	}
+	return foundImages
 }
 
 func init() {
