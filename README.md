@@ -27,6 +27,8 @@ For a full list of available commands, `dockbox help`
 ## Features
 
 ```
+-> % dockbox help
+
 Usage: dockbox [OPTIONS] COMMAND
 
 Manage workspaces and dependencies with ease in an isolated, secure environment.
@@ -40,10 +42,11 @@ Usage:
 
 Available Commands:
   clean       Removes all dockboxes on your machine
-  create      Creates a dockbox from URL/file or git clone
+  create      Creates a dockbox from a URL, file or git URL
   enter       Enters into a dockbox in a given directory
   help        Help about any command
   list        List all your dockboxes on your system
+  tree        Shows a tree of dockbox image histories
 
 Flags:
       --config string   config file (default is $HOME/.dockbox.yaml)
