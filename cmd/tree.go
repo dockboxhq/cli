@@ -40,13 +40,13 @@ var treeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		CheckError(err)
-		forest, _, err := buildImageForest(context.Background(), cli, treeOptions)
+		forest, err := buildImageForest(context.Background(), cli, treeOptions)
 		CheckError(err)
 
-		for _, tree := range forest {
+		for _, tree := range forest.roots {
 			tree.PrintTree()
 		}
-		if len(forest) == 0 {
+		if len(forest.roots) == 0 {
 			fmt.Println("No images found")
 		}
 	},
@@ -54,17 +54,24 @@ var treeCmd = &cobra.Command{
 
 type ImageNode struct {
 	children map[string]*ImageNode
+	parent   *ImageNode
 	name     string
 	ID       string
 }
 
-func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeOptions) ([]*ImageNode, map[string]*ImageNode, error) {
+type ImageForest struct {
+	roots    []*ImageNode
+	leaves   []*ImageNode
+	IDToNode map[string]*ImageNode
+}
+
+func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeOptions) (*ImageForest, error) {
 	var dockboxImages []types.ImageSummary
 	if treeOptions.All {
 		var errorImageList error
 		dockboxImages, errorImageList = cli.ImageList(ctx, types.ImageListOptions{All: false})
 		if errorImageList != nil {
-			return nil, nil, errorImageList
+			return nil, errorImageList
 		}
 	} else {
 		dockboxImages = getDockboxImages(cli, ListOptions{})
@@ -86,7 +93,7 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 		// log.Printf("Finding Image History for : %s %v \n", image.ID, image.RepoTags)
 		hist, err := cli.ImageHistory(ctx, image.ID)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		childNode := leafList[i]
 		for i, item := range hist {
@@ -111,6 +118,7 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 				}
 			}
 			IDtoImageNode[item.ID].children[childNode.ID] = childNode
+			childNode.parent = IDtoImageNode[item.ID]
 			childNode = IDtoImageNode[item.ID]
 		}
 	}
@@ -121,7 +129,11 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 	}
 	log.Printf("Finished building forest: %v\n", rootNames)
 
-	return rootList, IDtoImageNode, nil
+	return &ImageForest{
+		roots:    rootList,
+		leaves:   leafList,
+		IDToNode: IDtoImageNode,
+	}, nil
 }
 
 // Adapted from https://stackoverflow.com/questions/4965335/how-to-print-binary-tree-diagram-in-java

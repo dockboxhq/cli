@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -116,6 +117,65 @@ func removeContainersForImage(ctx context.Context, cli *client.Client, imageToCo
 			}
 		}
 	}
+	return nil
+}
+
+func postOrder(root *ImageNode, reachedLeaves *[]*ImageNode, visitedStack *[]*ImageNode) {
+	if root == nil {
+		return
+	}
+
+}
+
+func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName string) error {
+	forest, err := buildImageForest(ctx, cli, TreeOptions{All: true})
+	if err != nil {
+		return err
+	}
+
+	info, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		return err
+	}
+
+	deletionOrder := make([]*ImageNode, 0)
+	deletionOrder = append(deletionOrder, forest.IDToNode[info.ID])
+	lastNode, ok := forest.IDToNode[info.ID]
+	if !ok {
+		return errors.New("unknown error occurred while deleting: Node not found")
+	}
+
+	var node *ImageNode = nil
+
+	for node.parent != nil {
+		node = node.parent
+		if len(node.children) > 1 {
+			for _, child := range node.children {
+				if child.ID != lastNode.ID {
+					postOrder(child)
+				}
+			}
+		}
+		if node.name != "" {
+			res, err := GetUserBoolean("Delete parent image: %s %s?", node.name, node.ID)
+			if err != nil {
+				return err
+			}
+			if !res {
+				break
+			}
+		}
+		deletionOrder = append(deletionOrder, node.ID)
+	}
+
+	for _, id := range deletionOrder {
+		_, err := cli.ImageRemove(ctx, id, types.ImageRemoveOptions{Force: true, PruneChildren: true})
+		if err != nil && !strings.HasPrefix(err.Error(), "Error: No such image:") {
+			log.Printf("Error while deleting: %s", id)
+			return err
+		}
+	}
+
 	return nil
 }
 
