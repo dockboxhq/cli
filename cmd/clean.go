@@ -197,6 +197,7 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 			}
 		}
 		_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{Force: true, PruneChildren: true})
+		log.Printf("Deleted image: %s %s\n", image.ID, image.name)
 		if err != nil && !strings.HasPrefix(err.Error(), "Error: No such image:") {
 			log.Printf("Error while deleting: %s", image.ID)
 			return err
@@ -217,44 +218,6 @@ func printNodes(nodes []*ImageNode, message string) {
 	}
 	strings.Join(names, "\n-")
 	log.Printf("%s \n- %s", message, strings.Join(names, "\n- "))
-}
-
-// deprecated
-func deleteImageAndParents(ctx context.Context, cli *client.Client, imageName string) error {
-	imageHistory, err := cli.ImageHistory(ctx, imageName)
-	CheckError(err)
-	for _, item := range imageHistory {
-		if item.ID == "<missing>" {
-			break
-		}
-		// Ask for user confirmation for named repositories
-		if len(item.Tags) > 0 {
-			res, err := GetUserBoolean("Delete parent image: %s %s?", item.Tags[0], item.ID)
-			if err != nil {
-				return err
-			}
-			if !res {
-				break
-			}
-		}
-		_, err = cli.ImageRemove(ctx, item.ID, types.ImageRemoveOptions{Force: true, PruneChildren: true})
-		if err != nil && !strings.HasPrefix(err.Error(), "Error: No such image:") {
-			log.Printf("Error while deleting: %s %v", item.ID, item.Tags)
-			return err
-		}
-		log.Printf("Deleted image: %s %v\n", item.ID, item.Tags)
-	}
-	return nil
-	// Alternative method
-	// fmt.Println("Starting parent search")
-	// for image != "" {
-	// 	tempImage, _, err := cli.ImageInspectWithRaw(ctx, image)
-	// 	CheckError(err)
-	// 	fmt.Printf("%s %v\n", tempImage.ID, tempImage.RepoTags)
-	// 	image = tempImage.Parent
-	// }
-	// fmt.Println("Finished parent search")
-
 }
 
 func init() {
