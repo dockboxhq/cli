@@ -47,40 +47,33 @@ var cleanCmd = &cobra.Command{
 		CheckError(err)
 
 		imageToContainer := map[string][]string{}
-		populateImageToContainer(ctx, cli, imageToContainer)
+		err = populateImageToContainer(ctx, cli, imageToContainer)
 		CheckError(err)
 
 		if len(cleanCmdOptions.dockboxName) > 0 {
 			imageName := dockboxNameToImageName(cleanCmdOptions.dockboxName)
-			deleteImageAndParents(ctx, cli, imageName)
-			info, _, err := cli.ImageInspectWithRaw(ctx, imageName)
-			CheckError(err)
-			log.Printf("Found image ID: %s", info.ID)
-			err = removeContainersForImage(ctx, cli, imageToContainer, imageName)
-			CheckError(err)
-
-			err = deleteImageAndParents(ctx, cli, imageName)
+			err := deleteImageWithTree(ctx, cli, imageName)
 			CheckError(err)
 			fmt.Println("Successfully deleted dockbox: " + cleanCmdOptions.dockboxName)
 			return
 		}
 
-		images, err := cli.ImageList(ctx, types.ImageListOptions{})
-		CheckError(err)
+		// images, err := cli.ImageList(ctx, types.ImageListOptions{})
+		// CheckError(err)
 
-		for _, image := range images {
-			if len(image.RepoTags) == 0 {
-				continue
-			}
-			if isImageDockbox(image.RepoTags[0]) {
-				// Remove dependent containers before deleting image
-				log.Printf("Removing containers for image %s", image.RepoTags[0])
-				removeContainersForImage(ctx, cli, imageToContainer, image.ID)
-				err = deleteImageAndParents(ctx, cli, image.ID)
-				CheckError(err)
-				log.Printf("Deleted dockbox: %s", image.RepoTags[0])
-			}
-		}
+		// for _, image := range images {
+		// 	if len(image.RepoTags) == 0 {
+		// 		continue
+		// 	}
+		// 	if isImageDockbox(image.RepoTags[0]) {
+		// 		// Remove dependent containers before deleting image
+		// 		log.Printf("Removing containers for image %s", image.RepoTags[0])
+		// 		removeContainersForImage(ctx, cli, imageToContainer, image.ID)
+		// 		err = deleteImageAndParents(ctx, cli, image.ID)
+		// 		CheckError(err)
+		// 		log.Printf("Deleted dockbox: %s", image.RepoTags[0])
+		// 	}
+		// }
 	},
 	Args: cobra.MaximumNArgs(1),
 }
@@ -93,10 +86,10 @@ func populateImageToContainer(ctx context.Context, cli *client.Client, imageToCo
 	}
 	for _, container := range containers {
 		if isImageDockbox(container.Image) {
-			log.Printf("Found dockbox: %s %s", container.ImageID, container.Image)
-			imageToContainer[container.ImageID] = append(imageToContainer[container.ImageID], container.ID)
-			imageToContainer[container.Image] = append(imageToContainer[container.Image], container.ID)
+			log.Printf("Found dockbox with container: %s %s", container.ImageID, container.Image)
 		}
+		imageToContainer[container.ImageID] = append(imageToContainer[container.ImageID], container.ID)
+		imageToContainer[container.Image] = append(imageToContainer[container.Image], container.ID)
 	}
 	return nil
 }
@@ -124,7 +117,13 @@ func postOrder(root *ImageNode, reachedLeaves *[]*ImageNode, visitedStack *[]*Im
 	if root == nil {
 		return
 	}
-
+	if len(root.children) == 0 {
+		*reachedLeaves = append(*reachedLeaves, root)
+	}
+	for _, child := range root.children {
+		postOrder(child, reachedLeaves, visitedStack)
+	}
+	*visitedStack = append(*visitedStack, root)
 }
 
 func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName string) error {
@@ -140,38 +139,66 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 
 	deletionOrder := make([]*ImageNode, 0)
 	deletionOrder = append(deletionOrder, forest.IDToNode[info.ID])
-	lastNode, ok := forest.IDToNode[info.ID]
+	var lastNode *ImageNode = nil
+
+	var node, ok = forest.IDToNode[info.ID]
 	if !ok {
-		return errors.New("unknown error occurred while deleting: Node not found")
+		return errors.New("unknown error occurred while deleting: node not found")
 	}
-
-	var node *ImageNode = nil
-
+	log.Printf("Starting with %s %s\n", node.ID, node.name)
 	for node.parent != nil {
+		lastNode = node
 		node = node.parent
-		if len(node.children) > 1 {
-			for _, child := range node.children {
-				if child.ID != lastNode.ID {
-					postOrder(child)
-				}
+		reachedLeaves, visitedStack := make([]*ImageNode, 0), make([]*ImageNode, 0)
+		for _, child := range node.children {
+			if child.ID != lastNode.ID {
+				postOrder(child, &reachedLeaves, &visitedStack)
 			}
 		}
-		if node.name != "" {
-			res, err := GetUserBoolean("Delete parent image: %s %s?", node.name, node.ID)
-			if err != nil {
+		// Only need to ask for confirmation for tagged images or images with multiple children
+		var res bool = true
+		var err error = nil
+		if len(reachedLeaves) > 0 {
+			fmt.Printf("Warning: Removing %s %s will also remove the following images:\n", node.name, node.ID)
+			for _, leaf := range reachedLeaves {
+				fmt.Printf("- %s %s\n", leaf.ID, leaf.name)
+			}
+			res, err = GetUserBoolean(fmt.Sprintf("Confirm removal of %s %s and all the above images?", node.name, node.ID))
+		} else if node.name != "" {
+			res, err = GetUserBoolean("Remove parent image: %s %s?", node.name, node.ID)
+		}
+
+		if err != nil {
+			return err
+		}
+		if !res {
+			break
+		}
+		deletionOrder = append(deletionOrder, visitedStack...)
+		deletionOrder = append(deletionOrder, node)
+	}
+	printNodes(deletionOrder, "Deletion List")
+	res, err := GetUserBoolean("Confirm deletion?")
+	if err != nil {
+		return err
+	}
+	if !res {
+		return errors.New("user aborted cleanup operation")
+	}
+
+	imageToContainer := map[string][]string{}
+	err = populateImageToContainer(ctx, cli, imageToContainer)
+	CheckError(err)
+	for _, image := range deletionOrder {
+		if image.name != "<none>:<none>" {
+			err = removeContainersForImage(ctx, cli, imageToContainer, imageName)
+			if err != nil && !strings.HasPrefix(err.Error(), "Error: No such container:") {
 				return err
 			}
-			if !res {
-				break
-			}
 		}
-		deletionOrder = append(deletionOrder, node.ID)
-	}
-
-	for _, id := range deletionOrder {
-		_, err := cli.ImageRemove(ctx, id, types.ImageRemoveOptions{Force: true, PruneChildren: true})
+		_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{Force: true, PruneChildren: true})
 		if err != nil && !strings.HasPrefix(err.Error(), "Error: No such image:") {
-			log.Printf("Error while deleting: %s", id)
+			log.Printf("Error while deleting: %s", image.ID)
 			return err
 		}
 	}
@@ -179,6 +206,20 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 	return nil
 }
 
+func printNodes(nodes []*ImageNode, message string) {
+	names := make([]string, len(nodes))
+	for i, image := range nodes {
+		if image.name == "" {
+			names[i] = image.ID
+		} else {
+			names[i] = image.name
+		}
+	}
+	strings.Join(names, "\n-")
+	log.Printf("%s \n- %s", message, strings.Join(names, "\n- "))
+}
+
+// deprecated
 func deleteImageAndParents(ctx context.Context, cli *client.Client, imageName string) error {
 	imageHistory, err := cli.ImageHistory(ctx, imageName)
 	CheckError(err)
