@@ -41,7 +41,7 @@ Usage:
   dockbox [command]
 
 Available Commands:
-  clean       Removes all dockboxes on your machine
+  clean       Removes a dockbox from your machine
   create      Creates a dockbox from a URL, file or git URL
   enter       Enters into a dockbox in a given directory
   help        Help about any command
