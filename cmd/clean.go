@@ -29,7 +29,7 @@ import (
 )
 
 type CleanOptions struct {
-	dockboxName   string
+	// dockboxName   string
 	confirmBefore bool
 	keepFolder    bool
 }
@@ -38,25 +38,33 @@ var cleanCmdOptions = CleanOptions{}
 
 // cleanCmd represents the clean command
 var cleanCmd = &cobra.Command{
-	Use:   "clean [path]",
-	Short: "Removes all dockboxes on your machine",
-	Long:  `Clean up your machine! Get rid of all the dockboxes on your system`,
+	Use:   "clean <dockbox name>",
+	Short: "Removes a dockbox on your machine",
+	Long:  `Clean up your machine! Get rid of a dockbox on your system`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		ctx := context.Background()
 		CheckError(err)
 
-		imageToContainer := map[string][]string{}
-		err = populateImageToContainer(ctx, cli, imageToContainer)
-		CheckError(err)
+		// imageToContainer := map[string][]string{}
+		// err = populateImageToContainer(ctx, cli, imageToContainer)
+		// CheckError(err)
 
-		if len(cleanCmdOptions.dockboxName) > 0 {
-			imageName := dockboxNameToImageName(cleanCmdOptions.dockboxName)
-			err := deleteImageWithTree(ctx, cli, imageName)
-			CheckError(err)
-			fmt.Println("Successfully deleted dockbox: " + cleanCmdOptions.dockboxName)
-			return
+		// if len(cleanCmdOptions.dockboxName) > 0 {
+		// 	imageName := dockboxNameToImageName(cleanCmdOptions.dockboxName)
+		// 	err := deleteImageWithTree(ctx, cli, imageName)
+		// 	CheckError(err)
+		// 	fmt.Println("Successfully deleted dockbox: " + cleanCmdOptions.dockboxName)
+		// 	return
+		// }
+
+		dockboxName := args[0]
+		if !isImageDockbox(dockboxName) {
+			dockboxName = dockboxNameToImageName(dockboxName)
 		}
+		err = deleteImageWithTree(ctx, cli, dockboxName)
+		CheckError(err)
+		fmt.Println("Successfully deleted dockbox: " + dockboxName)
 
 		// images, err := cli.ImageList(ctx, types.ImageListOptions{})
 		// CheckError(err)
@@ -75,7 +83,7 @@ var cleanCmd = &cobra.Command{
 		// 	}
 		// }
 	},
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.ExactArgs(1),
 }
 
 func populateImageToContainer(ctx context.Context, cli *client.Client, imageToContainer map[string][]string) error {
@@ -223,7 +231,7 @@ func printNodes(nodes []*ImageNode, message string) {
 func init() {
 	rootCmd.AddCommand(cleanCmd)
 
-	cleanCmd.PersistentFlags().StringVarP(&cleanCmdOptions.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
+	// cleanCmd.PersistentFlags().StringVarP(&cleanCmdOptions.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
 	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
 	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
 }
