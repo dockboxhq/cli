@@ -40,6 +40,15 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
+      
+    - name: Cache
+      uses: actions/cache@v2.1.6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('go.mod') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
