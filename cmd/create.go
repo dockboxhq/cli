@@ -33,15 +33,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/moby/term"
-
 	"github.com/spf13/viper"
 
 	"github.com/karrick/godirwalk"
 
 	// "github.com/mitchellh/go-homedir"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 
@@ -103,7 +100,9 @@ var createCmd = &cobra.Command{
 		CheckError(err)
 		log.Printf("Wrote config to %s\n", configPath)
 
-		_, err = RunContainer(imageName, cli)
+		containerID, err := CreateContainer(imageName, cli, configPath)
+		CheckError(err)
+		_, err = RunContainer(containerID, cli)
 		CheckError(err)
 
 	},
@@ -199,20 +198,27 @@ func generateDockerfile(dirPath string) (string, error) {
 	sorted := SortMap(stats)
 	log.Println(sorted)
 
-	var chosenLanguage string = ""
+	userSelectedLanguage := false
+	chosenLanguage := ""
 	for i := len(sorted) - 1; i >= 0; i-- {
-		res, _ := GetUserBoolean("Found language: '%s'. Generate Dockerfile for this language? ", sorted[i].Key)
-		if res {
+		if _, ok := LanguageToImageMapper[sorted[i].Key]; !ok {
+			userSelectedLanguage, _ = GetUserBoolean("Create dockbox with %s? Image was not found for this language so default image will be used. ", sorted[i].Key)
+			chosenLanguage = "unknown"
+		} else {
+			userSelectedLanguage, _ = GetUserBoolean("Create dockbox with %s? ", sorted[i].Key)
 			chosenLanguage = sorted[i].Key
+		}
+		if userSelectedLanguage {
 			break
 		}
 	}
 
-	if len(chosenLanguage) == 0 {
+	// user does not select any language
+	if !userSelectedLanguage {
 		chosenLanguage = "unknown"
 	}
 
-	log.Printf("Found Image: %s", LanguageToImageMapper[chosenLanguage])
+	log.Printf("Using image %s to build dockbox...\n", LanguageToImageMapper[chosenLanguage].Image)
 	return createDockerFileForLanguage(dirPath, LanguageToImageMapper[chosenLanguage])
 }
 
@@ -293,65 +299,6 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 		// PrintJSONBuildStatus(jsonText)
 	}
 	return imageName, err
-}
-
-func RunContainer(imageName string, dockerClient *client.Client) (string, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	createResponse, errCreate := dockerClient.ContainerCreate(ctx, &container.Config{
-		Image:        imageName,
-		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		Tty:          true,
-		OpenStdin:    true,
-	}, nil, nil, nil, "")
-	if errCreate != nil {
-		return "", errCreate
-	}
-
-	attachRes, errAttach := dockerClient.ContainerAttach(ctx, createResponse.ID, types.ContainerAttachOptions{
-		Stream: true,
-		Stdin:  true,
-		Stdout: true,
-		Stderr: true,
-	})
-
-	if errAttach != nil {
-		return "", errAttach
-	}
-	streamer := SetUpStreamer(attachRes)
-	errCh := make(chan error, 1)
-
-	go func() {
-		errCh <- func() error {
-
-			if errHijack := streamer.Stream(ctx); errHijack != nil {
-				return errHijack
-			}
-			return errAttach
-		}()
-	}()
-
-	if errStart := dockerClient.ContainerStart(ctx, createResponse.ID, types.ContainerStartOptions{}); errStart != nil {
-		<-errCh
-		return "", errStart
-	}
-
-	if errCh != nil {
-		if err := <-errCh; err != nil {
-			if _, ok := err.(term.EscapeError); ok {
-				// The user entered the detach escape sequence.
-				return "", nil
-			}
-
-			log.Printf("Error hijack: %s", err)
-			return "", err
-		}
-	}
-
-	return createResponse.ID, nil
 }
 
 func init() {

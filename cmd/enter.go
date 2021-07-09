@@ -16,14 +16,21 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/moby/term"
 
 	"github.com/docker/docker/client"
 	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 )
 
 // enterCmd represents the enter command
@@ -38,7 +45,9 @@ to "enter" into the dockbox allowing you to run commands and play around with it
 		if len(args) > 0 {
 			path = args[0]
 		}
-		viper.SetConfigFile(filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml"))
+
+		configPath := filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml")
+		viper.SetConfigFile(configPath)
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 				fmt.Println("This directory does not contain a dockbox! Please run dockbox create")
@@ -47,13 +56,89 @@ to "enter" into the dockbox allowing you to run commands and play around with it
 				CheckError(err)
 			}
 		}
-		imageName := viper.GetString("image")
+
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		CheckError(err)
-		_, err = RunContainer(imageName, cli)
+		containerID := viper.GetString("container")
+		if containerID == "" {
+			imageName := viper.GetString("image")
+			containerID, err = CreateContainer(imageName, cli, configPath)
+			CheckError(err)
+		}
+
+		_, err = RunContainer(containerID, cli)
 		CheckError(err)
 
 	},
+}
+
+func CreateContainer(imageName string, dockerClient *client.Client, configPath string) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	createResponse, errCreate := dockerClient.ContainerCreate(ctx, &container.Config{
+		Image:        imageName,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+		OpenStdin:    true,
+	}, nil, nil, nil, "")
+	if errCreate != nil {
+		return "", errCreate
+	}
+	viper.Set("container", createResponse.ID)
+	err := viper.WriteConfigAs(configPath)
+	if err != nil {
+		return "", err
+	}
+	return createResponse.ID, nil
+}
+
+func RunContainer(containerID string, dockerClient *client.Client) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	attachRes, errAttach := dockerClient.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  true,
+		Stdout: true,
+		Stderr: true,
+	})
+
+	if errAttach != nil {
+		return "", errAttach
+	}
+	streamer := SetUpStreamer(attachRes)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- func() error {
+
+			if errHijack := streamer.Stream(ctx); errHijack != nil {
+				return errHijack
+			}
+			return errAttach
+		}()
+	}()
+
+	if errStart := dockerClient.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); errStart != nil {
+		<-errCh
+		return "", errStart
+	}
+
+	if errCh != nil {
+		if err := <-errCh; err != nil {
+			if _, ok := err.(term.EscapeError); ok {
+				// The user entered the detach escape sequence.
+				return "", nil
+			}
+
+			log.Printf("Error hijack: %s", err)
+			return "", err
+		}
+	}
+
+	return containerID, nil
 }
 
 func init() {
