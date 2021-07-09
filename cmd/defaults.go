@@ -7,10 +7,9 @@ import (
 var IgnoredFilesForAnalysis = []string{".git/*"}
 
 type Image struct {
-	Image        string
-	Dependencies []string
-	Commands     []string
-	EntryPoint   string
+	Image      string
+	Commands   []string
+	EntryPoint string
 }
 
 // type Command struct {
@@ -18,27 +17,24 @@ type Image struct {
 // }
 
 func (i Image) String() string {
-	return fmt.Sprintf("{'image': %s, 'dependencies': %s, 'commands': %s}", i.Image, i.Dependencies, i.Commands)
+	return fmt.Sprintf("{'image': %s, 'commands': %s}", i.Image, i.Commands)
 }
 
 var LanguageToImageMapper = map[string]Image{
 	"python": {
 		"python:3.8-slim-buster",
-		[]string{"requirements.txt"},
 		[]string{"pip install -r requirements.txt"},
-		"/bin/sh",
+		"/bin/bash",
 	},
 	"javascript": {
 		"node:14",
-		[]string{"package.json"},
 		[]string{"npm install"},
-		"/bin/sh",
+		"/bin/bash",
 	},
 	"unknown": {
 		"ubuntu:18.04",
-		[]string{},
-		[]string{},
-		"/bin/sh",
+		[]string{"apt-get update && apt-get install -y build-essential"},
+		"/bin/bash",
 	},
 }
 

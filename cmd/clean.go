@@ -32,6 +32,7 @@ type CleanOptions struct {
 	// dockboxName   string
 	confirmBefore bool
 	keepFolder    bool
+	isImage       bool
 }
 
 var cleanCmdOptions = CleanOptions{}
@@ -59,7 +60,7 @@ var cleanCmd = &cobra.Command{
 		// }
 
 		dockboxName := args[0]
-		if !isImageDockbox(dockboxName) {
+		if !isImageDockbox(dockboxName) && !cleanCmdOptions.isImage {
 			dockboxName = dockboxNameToImageName(dockboxName)
 		}
 		err = deleteImageWithTree(ctx, cli, dockboxName)
@@ -234,4 +235,5 @@ func init() {
 	// cleanCmd.PersistentFlags().StringVarP(&cleanCmdOptions.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
 	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
 	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
+	cleanCmd.PersistentFlags().BoolVar(&cleanCmdOptions.isImage, "image", false, "True if given name is an image")
 }
