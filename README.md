@@ -20,7 +20,7 @@ Once you are done with the dockbox, clean up your resources with `dockbox clean`
 2. `cd dockbox`
 3. `go install`
 4. `dockbox create <url>`
-5. `dockbox clean`
+5. `dockbox clean <dockbox name>`
 
 For a full list of available commands, `dockbox help`
 
@@ -41,7 +41,7 @@ Usage:
   dockbox [command]
 
 Available Commands:
-  clean       Removes all dockboxes on your machine
+  clean       Removes a dockbox from your machine
   create      Creates a dockbox from a URL, file or git URL
   enter       Enters into a dockbox in a given directory
   help        Help about any command
