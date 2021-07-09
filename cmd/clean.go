@@ -40,7 +40,7 @@ var cleanCmdOptions = CleanOptions{}
 // cleanCmd represents the clean command
 var cleanCmd = &cobra.Command{
 	Use:   "clean <dockbox name>",
-	Short: "Removes a dockbox on your machine",
+	Short: "Removes a dockbox from your machine",
 	Long:  `Clean up your machine! Get rid of a dockbox on your system`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cli, err := client.NewClientWithOpts(client.FromEnv)

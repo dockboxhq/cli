@@ -1,8 +1,8 @@
 # dockbox
 
-`dockbox` is a useful tool for when you want to try out code quickly and easily without compromising your own system. As a bonus, it makes it easy to delete the dependencies and other side effects as a result of trying out code.
+`dockbox` is a useful CLI tool for trying out code from remote repositories. It allows you to to try out code quickly and easily without compromising your own system, and easily organize your workspace. Plus, it makes it very easy to delete the dependencies and other side effects that result from running the code.
 
-All you need is Docker installed on your system, and let dockbox do the rest.
+All you need is [Docker](https://www.docker.com/get-started) installed on your system, and let `dockbox` do the rest.
 
 ## Getting Started
 
@@ -14,7 +14,7 @@ Then run `dockbox create <url>` to create a dockbox from a URL. The code reposit
 
 Once you are done with the dockbox, clean up your resources with `dockbox clean` which will clean up all side-effects/resources associated with the code you just installed.
 
-5 easy steps to getting started:
+To summarize, there are 5 easy steps to getting started:
 
 1. `git clone https://github.com/sriharivishnu/dockbox.git`
 2. `cd dockbox`
@@ -61,9 +61,9 @@ This project is still a work in progress! We will continue to add more features 
 
 Features in Progress:
 
-- Allowing URLs other than git repositories
-- Adding better customizability for images and commands
-- Multi-module support to analyze a file tree and give possible groupings of a possible project structure
+- [x] Allowing URLs other than git repositories
+- [ ] Adding better customizability for images and commands
+- [ ] Multi-module support to analyze a file tree and give possible groupings of a possible project structure
   - This is useful when say having a backend and a frontend in different folders in the same repository
 
 ## Contributing
