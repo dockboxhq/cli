@@ -31,9 +31,29 @@ var LanguageToImageMapper = map[string]Image{
 		[]string{"npm install"},
 		"/bin/bash",
 	},
-	"unknown": {
+	"c++": {
 		"ubuntu:18.04",
 		[]string{"apt-get update && apt-get install -y build-essential"},
+		"/bin/bash",
+	},
+	"c": {
+		"ubuntu:18.04",
+		[]string{"apt-get update && apt-get install -y build-essential"},
+		"/bin/bash",
+	},
+	"java": {
+		"openjdk:7",
+		[]string{},
+		"/bin/bash",
+	},
+	"go": {
+		"golang:1.16.5-buster",
+		[]string{},
+		"/bin/bash",
+	},
+	"unknown": {
+		"ubuntu:18.04",
+		[]string{},
 		"/bin/bash",
 	},
 }
