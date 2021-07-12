@@ -17,15 +17,12 @@ package cmd
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
-	"os"
-	"path/filepath"
 
 	"github.com/moby/term"
 
 	"github.com/docker/docker/client"
-	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
 
@@ -34,48 +31,55 @@ import (
 )
 
 // enterCmd represents the enter command
-var enterCmd = &cobra.Command{
-	Use:   "enter [path]",
-	Short: "Enters into a dockbox in a given directory",
-	Long: `With a dockbox already created in a directory, you can use this command 
-to "enter" into the dockbox allowing you to run commands and play around with its contents`,
-	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		path := "."
-		if len(args) > 0 {
-			path = args[0]
-		}
-
-		configPath := filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml")
-		viper.SetConfigFile(configPath)
-		if err := viper.ReadInConfig(); err != nil {
-			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-				fmt.Println("This directory does not contain a dockbox! Please run dockbox create")
-				os.Exit(1)
-			} else {
-				CheckError(err)
+func NewEnterCommand(cli *client.Client) *cobra.Command {
+	var enterOptions EnterOptions
+	var enterCmd = &cobra.Command{
+		Use:   "enter [<path>]",
+		Short: "Enters into a dockbox in a given directory",
+		Long: `With a dockbox already created in a directory, you can use this command 
+	to "enter" into the dockbox allowing you to run commands and play around with its contents`,
+		Args: cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			enterOptions.path = "."
+			if len(args) > 0 {
+				enterOptions.path = args[0]
 			}
-		}
-
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		CheckError(err)
-		containerID := viper.GetString("container")
-		if containerID == "" {
-			imageName := viper.GetString("image")
-			containerID, err = CreateContainer(imageName, cli, configPath)
-			CheckError(err)
-		}
-
-		_, err = RunContainer(containerID, cli)
-		CheckError(err)
-
-	},
+			CheckError(RunEnterCommand(cli, enterOptions))
+		},
+	}
+	return enterCmd
 }
 
-func CreateContainer(imageName string, dockerClient *client.Client, configPath string) (string, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	createResponse, errCreate := dockerClient.ContainerCreate(ctx, &container.Config{
+func RunEnterCommand(cli *client.Client, enterOptions EnterOptions) error {
+	ctx := context.Background()
+	if enterOptions.containerID != "" {
+		_, err := runContainer(ctx, cli, enterOptions.containerID)
+		return err
+	}
+	container, err := getConfigByKey(enterOptions.path, "container")
+	if err != nil {
+		return err
+	}
+	if container == "" {
+		container, err = createContainerFromPath(ctx, cli, enterOptions.path)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = runContainer(ctx, cli, container)
+	return err
+
+}
+
+func createContainerFromPath(ctx context.Context, cli *client.Client, path string) (string, error) {
+	imageName, err := getConfigByKey(path, "image")
+	if err != nil {
+		return "", err
+	}
+	if imageName == "" {
+		return "", errors.New("no image found for dockbox")
+	}
+	createResponse, errCreate := cli.ContainerCreate(ctx, &container.Config{
 		Image:        imageName,
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -86,18 +90,11 @@ func CreateContainer(imageName string, dockerClient *client.Client, configPath s
 	if errCreate != nil {
 		return "", errCreate
 	}
-	viper.Set("container", createResponse.ID)
-	err := viper.WriteConfigAs(configPath)
-	if err != nil {
-		return "", err
-	}
+	setConfigKey("container", createResponse.ID, path)
 	return createResponse.ID, nil
 }
 
-func RunContainer(containerID string, dockerClient *client.Client) (string, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func runContainer(ctx context.Context, dockerClient *client.Client, containerID string) (string, error) {
 	attachRes, errAttach := dockerClient.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
 		Stream: true,
 		Stdin:  true,
@@ -139,8 +136,4 @@ func RunContainer(containerID string, dockerClient *client.Client) (string, erro
 	}
 
 	return containerID, nil
-}
-
-func init() {
-	rootCmd.AddCommand(enterCmd)
 }

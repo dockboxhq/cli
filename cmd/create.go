@@ -18,19 +18,21 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"os"
 
 	// "io"
 
-	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/spf13/viper"
@@ -46,75 +48,123 @@ import (
 )
 
 // createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create [URL to repository] [path-to-directory]",
-	Short: "Creates a dockbox from a URL, file or git URL",
-	Long:  `Use dockbox create to create a new dockbox.`,
-	Args:  cobra.MaximumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		CheckError(err)
+func NewCreateCommand(cli *client.Client) *cobra.Command {
+	var createOptions CreateOptions
+	var createCmd = &cobra.Command{
+		Use:   "create [<source>] [<directory>]",
+		Short: "Creates a dockbox from a URL, file or git URL",
+		Long:  `Use dockbox create to create a new dockbox.`,
+		Args:  cobra.MaximumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			source := "."
+			dest := ""
 
-		dirPath := "."
-		if len(args) == 0 || args[0] == "." {
-			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-			dirPath = "../" + filepath.Base(dir)
-			CheckError(err)
-		} else {
-			target := args[0]
-			// Check if path exists
-			if info, err := os.Stat(target); err == nil {
-				if info.IsDir() {
-					dirPath = target
-				} else {
-					panic("Cannot create dockbox from a file")
-				}
-			} else {
-				repoURL, err := url.Parse(target)
-				CheckError(err)
-
-				dirPath = path.Base(repoURL.Path)
-				if len(args) > 1 {
-					dirPath = args[1]
-				}
-				fmt.Println("Fetching data from source...")
-				getRepositoryData(target, dirPath)
-				fmt.Println("Successfully retrieved data from source")
+			if len(args) > 0 {
+				source = args[0]
 			}
-		}
-		os.Mkdir(path.Join(dirPath, HIDDEN_DIRECTORY), 0755)
 
-		log.Println("Creating dockbox...")
-		dockerFileName, err := getDockerfile(dirPath)
-		CheckError(err)
-
-		log.Println("Building dockbox...")
-		imageName, err := buildImage(dirPath, dockerFileName, cli)
-		CheckError(err)
-		log.Printf("Successfully created new dockbox: %s\n", imageName)
-
-		viper.Set("image", imageName)
-		viper.Set("Dockerfile", dockerFileName)
-		configPath := path.Join(dirPath, HIDDEN_DIRECTORY, ".dockbox.yaml")
-		err = viper.WriteConfigAs(configPath)
-		CheckError(err)
-		log.Printf("Wrote config to %s\n", configPath)
-
-		containerID, err := CreateContainer(imageName, cli, configPath)
-		CheckError(err)
-		_, err = RunContainer(containerID, cli)
-		CheckError(err)
-
-	},
+			if len(args) > 1 {
+				dest = args[1]
+			}
+			createOptions.source = source
+			createOptions.destPath = dest
+			CheckError(RunCreateCommand(cli, createOptions))
+		},
+	}
+	createCmd.PersistentFlags().StringVarP(&createOptions.dockerFile, "dockerfile", "d", "", "Use this option to set a dockerfile")
+	createCmd.PersistentFlags().BoolVarP(&createOptions.remove, "remove", "r", false, "Removes code and artifacts after completion")
+	// createCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
+	return createCmd
 }
 
-func getRepositoryData(url string, path string) {
+func RunCreateCommand(cli *client.Client, createOptions CreateOptions) error {
+	dockboxName := ""
+	// User passed in a file path
+	if exists, info, _ := pathExists(createOptions.source); exists {
+		if !info.IsDir() {
+			return errors.New("cannot create dockbox from a single file. please specify a path to a directory")
+		}
+
+		if createOptions.destPath != "" {
+			return errors.New("cannot create dockbox from local file with a destination path")
+		}
+
+		// User passed in a file path
+		createOptions.source = filepath.Clean(createOptions.source)
+		abs, err := filepath.Abs(createOptions.source)
+		if err != nil {
+			return err
+		}
+		log.Printf("Given cleaned source %s %s\n", createOptions.source, abs)
+
+		dockboxName = filepath.Base(abs)
+		log.Printf("Using directory %s\n", dockboxName)
+		if dockboxName == "/" {
+			dockboxName = uuid.New().String()
+		}
+		createOptions.destPath = createOptions.source
+
+	} else {
+		repoURL, err := url.Parse(createOptions.source)
+		CheckError(err)
+
+		dockboxName = path.Base(repoURL.Path)
+		if createOptions.destPath == "" {
+			createOptions.destPath = "./" + dockboxName
+		}
+		fmt.Println("Fetching data from source...")
+		getRepositoryData(createOptions.source, createOptions.destPath)
+		fmt.Println("Successfully retrieved data from source")
+	}
+
+	if createOptions.dockboxName == "" {
+		// TODO: use this value
+		createOptions.dockboxName = dockboxName
+	}
+
+	// Data is now at createOptions.destPath
+
+	os.Mkdir(path.Join(createOptions.destPath, HIDDEN_DIRECTORY), 0755)
+
+	log.Println("Creating dockbox...")
+	dockerFileName, err := getDockerfile(createOptions.destPath)
+	log.Printf("Using Dockerfile at: %s\n", dockerFileName)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Building dockbox at %s...", createOptions.destPath)
+	imageName, err := buildImage(cli, createOptions.destPath, dockerFileName, createOptions.dockboxName)
+	if err != nil {
+		return err
+	}
+	log.Printf("Successfully created new dockbox: %s\n", imageName)
+
+	viper.Set("image", imageName)
+	viper.Set("Dockerfile", dockerFileName)
+	configPath := path.Join(createOptions.destPath, HIDDEN_DIRECTORY, ".dockbox.yaml")
+	err = viper.WriteConfigAs(configPath)
+	if err != nil {
+		return err
+	}
+	log.Printf("Wrote config to %s\n", configPath)
+
+	containerID, err := createContainerFromPath(context.Background(), cli, createOptions.destPath)
+	if err != nil {
+		return err
+	}
+
+	_, err = runContainer(context.Background(), cli, containerID)
+	return err
+}
+
+func getRepositoryData(url string, dest string) {
 	if strings.Contains(url, "github") || strings.Contains(url, "gitlab") && !strings.HasPrefix(url, "git::") {
 		url = "git::" + url
 	}
 	client := &getter.Client{
 		Ctx:  context.Background(),
-		Dst:  path,
+		Dst:  dest,
 		Src:  url,
 		Mode: getter.ClientModeAny,
 		Detectors: []getter.Detector{
@@ -193,7 +243,9 @@ func generateDockerfile(dirPath string) (string, error) {
 			Unsorted: true,
 		},
 	)
-	CheckError(err)
+	if err != nil {
+		return "", err
+	}
 	log.Println(stats)
 	sorted := SortMap(stats)
 	log.Println(sorted)
@@ -271,7 +323,7 @@ func createDockerFileForLanguage(dirPath string, language Image) (string, error)
 	return dockerFileName, nil
 }
 
-func buildImage(dirPath string, dockerFileName string, dockerClient *client.Client) (string, error) {
+func buildImage(dockerClient *client.Client, dirPath string, dockerFileName string, dockboxName string) (string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -279,7 +331,7 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 	if err != nil {
 		return "", err
 	}
-	imageName := dockboxNameToImageName(strings.ToLower(filepath.Base(dirPath)))
+	imageName := dockboxNameToImageName(dockboxName)
 	opts := types.ImageBuildOptions{
 		Dockerfile: dockerFileName,
 		Tags:       []string{imageName},
@@ -299,12 +351,4 @@ func buildImage(dirPath string, dockerFileName string, dockerClient *client.Clie
 		// PrintJSONBuildStatus(jsonText)
 	}
 	return imageName, err
-}
-
-func init() {
-	rootCmd.AddCommand(createCmd)
-
-	createCmd.PersistentFlags().StringP("dockerfile", "d", "", "Use this option to set a dockerfile")
-	createCmd.PersistentFlags().BoolP("keep", "k", false, "Keeps code and artifacts")
-	createCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
 }

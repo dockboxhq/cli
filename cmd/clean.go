@@ -28,63 +28,59 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type CleanOptions struct {
-	// dockboxName   string
-	confirmBefore bool
-	keepFolder    bool
-	isImage       bool
+func NewCleanCommand(cli *client.Client) *cobra.Command {
+	var cleanCmdOptions = CleanOptions{}
+
+	// cleanCmd represents the clean command
+	var cleanCmd = &cobra.Command{
+		Use:   "clean <dockbox name>",
+		Short: "Removes a dockbox from your machine",
+		Long:  `Clean up your machine! Get rid of a dockbox on your system`,
+		Run: func(cmd *cobra.Command, args []string) {
+
+			dockboxName := args[0]
+			if !isImageDockbox(dockboxName) && !cleanCmdOptions.isImage {
+				dockboxName = dockboxNameToImageName(dockboxName)
+			}
+			cleanCmdOptions.dockboxName = dockboxName
+
+			// images, err := cli.ImageList(ctx, types.ImageListOptions{})
+			// CheckError(err)
+
+			// for _, image := range images {
+			// 	if len(image.RepoTags) == 0 {
+			// 		continue
+			// 	}
+			// 	if isImageDockbox(image.RepoTags[0]) {
+			// 		// Remove dependent containers before deleting image
+			// 		log.Printf("Removing containers for image %s", image.RepoTags[0])
+			// 		removeContainersForImage(ctx, cli, imageToContainer, image.ID)
+			// 		err = deleteImageAndParents(ctx, cli, image.ID)
+			// 		CheckError(err)
+			// 		log.Printf("Deleted dockbox: %s", image.RepoTags[0])
+			// 	}
+			// }
+			CheckError(RunCleanCommand(cli, cleanCmdOptions))
+		},
+		Args: cobra.ExactArgs(1),
+	}
+
+	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
+	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
+	cleanCmd.PersistentFlags().BoolVar(&cleanCmdOptions.isImage, "image", false, "True if given name is an image")
+
+	return cleanCmd
 }
 
-var cleanCmdOptions = CleanOptions{}
-
-// cleanCmd represents the clean command
-var cleanCmd = &cobra.Command{
-	Use:   "clean <dockbox name>",
-	Short: "Removes a dockbox from your machine",
-	Long:  `Clean up your machine! Get rid of a dockbox on your system`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		ctx := context.Background()
-		CheckError(err)
-
-		// imageToContainer := map[string][]string{}
-		// err = populateImageToContainer(ctx, cli, imageToContainer)
-		// CheckError(err)
-
-		// if len(cleanCmdOptions.dockboxName) > 0 {
-		// 	imageName := dockboxNameToImageName(cleanCmdOptions.dockboxName)
-		// 	err := deleteImageWithTree(ctx, cli, imageName)
-		// 	CheckError(err)
-		// 	fmt.Println("Successfully deleted dockbox: " + cleanCmdOptions.dockboxName)
-		// 	return
-		// }
-
-		dockboxName := args[0]
-		if !isImageDockbox(dockboxName) && !cleanCmdOptions.isImage {
-			dockboxName = dockboxNameToImageName(dockboxName)
-		}
-		err = deleteImageWithTree(ctx, cli, dockboxName)
-		CheckError(err)
-		fmt.Println("Successfully deleted dockbox: " + dockboxName)
-
-		// images, err := cli.ImageList(ctx, types.ImageListOptions{})
-		// CheckError(err)
-
-		// for _, image := range images {
-		// 	if len(image.RepoTags) == 0 {
-		// 		continue
-		// 	}
-		// 	if isImageDockbox(image.RepoTags[0]) {
-		// 		// Remove dependent containers before deleting image
-		// 		log.Printf("Removing containers for image %s", image.RepoTags[0])
-		// 		removeContainersForImage(ctx, cli, imageToContainer, image.ID)
-		// 		err = deleteImageAndParents(ctx, cli, image.ID)
-		// 		CheckError(err)
-		// 		log.Printf("Deleted dockbox: %s", image.RepoTags[0])
-		// 	}
-		// }
-	},
-	Args: cobra.ExactArgs(1),
+func RunCleanCommand(cli *client.Client, cleanOptions CleanOptions) error {
+	ctx := context.Background()
+	err := deleteImageWithTree(ctx, cli, cleanOptions.dockboxName)
+	if err != nil {
+		return err
+	}
+	CheckError(err)
+	fmt.Println("Successfully deleted dockbox: " + cleanOptions.dockboxName)
+	return nil
 }
 
 func populateImageToContainer(ctx context.Context, cli *client.Client, imageToContainer map[string][]string) error {
@@ -227,13 +223,4 @@ func printNodes(nodes []*ImageNode, message string) {
 	}
 	strings.Join(names, "\n-")
 	log.Printf("%s \n- %s", message, strings.Join(names, "\n- "))
-}
-
-func init() {
-	rootCmd.AddCommand(cleanCmd)
-
-	// cleanCmd.PersistentFlags().StringVarP(&cleanCmdOptions.dockboxName, "name", "n", "", "Clean a specific dockbox by name")
-	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
-	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
-	cleanCmd.PersistentFlags().BoolVar(&cleanCmdOptions.isImage, "image", false, "True if given name is an image")
 }

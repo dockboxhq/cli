@@ -15,7 +15,9 @@ limitations under the License.
 */
 package main
 
-import "github.com/sriharivishnu/dockbox/cmd"
+import (
+	"github.com/sriharivishnu/dockbox/cmd"
+)
 
 func main() {
 	cmd.Execute()

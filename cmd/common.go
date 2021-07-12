@@ -1,10 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/docker/docker/client"
+	"github.com/spf13/viper"
 )
 
 const PREFIX = "dockbox"
@@ -62,4 +68,40 @@ func dockboxNameToImageName(boxName string) string {
 
 func isImageDockbox(imageName string) bool {
 	return strings.HasPrefix(imageName, PREFIX)
+}
+
+func getConfigByKey(path string, key string) (string, error) {
+	configPath := filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml")
+	viper.SetConfigFile(configPath)
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			return "", errors.New("this directory does not contain a dockbox! please run dockbox create")
+		} else {
+			return "", err
+		}
+	}
+	return viper.GetString(key), nil
+}
+func setConfigKey(key string, value string, path string) error {
+	configPath := filepath.Join(path, HIDDEN_DIRECTORY, ".dockbox.yaml")
+	viper.Set(key, value)
+	err := viper.WriteConfigAs(configPath)
+	return err
+}
+
+func pathExists(path string) (bool, os.FileInfo, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return true, info, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil, nil
+	}
+	return false, nil, err
+}
+
+func checkDockboxExists(ctx context.Context, cli *client.Client, name string) bool {
+	imageName := repoTagToDockboxName(name)
+	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	return err != nil
 }

@@ -32,35 +32,34 @@ import (
 	"github.com/docker/docker/client"
 )
 
-type ListOptions struct {
-	paths []string
-}
-
-var options = ListOptions{}
-
 // listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:   "list [paths...]",
-	Short: "List all your dockboxes on your system",
-	Long: `Use this command to list out your dockboxes on the system. 
-It will also show the running dockboxes if there are any running.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		CheckError(err)
 
-		options.paths = args
+func NewListCommand(cli *client.Client) *cobra.Command {
+	var listOptions ListOptions
 
-		filterImages := getDockboxesFromPaths(options)
-		getDockboxImages(cli, options)
-		printGlobalDockboxes(cli, filterImages, len(args) > 0)
-	},
+	var listCmd = &cobra.Command{
+		Use:   "list [<paths...>]",
+		Short: "List all your dockboxes on your system",
+		Long: `Use this command to list out your dockboxes on the system. 
+	It will also show the running dockboxes if there are any running.`,
+		Run: func(cmd *cobra.Command, args []string) {
+
+			listOptions.paths = args
+
+			CheckError(RunListCommand(cli, listOptions))
+		},
+	}
+	return listCmd
 }
 
-func printGlobalDockboxes(cli *client.Client, foundImages map[string]bool, findInPath bool) {
-
-	runningDockboxes := getRunningDockboxImages(cli, options)
-
+func RunListCommand(cli *client.Client, listOptions ListOptions) error {
+	ctx := context.Background()
 	w := tabwriter.NewWriter(os.Stdout, 1, 1, 2, ' ', 0)
+
+	runningDockboxes, err := getRunningDockboxImages(ctx, cli, listOptions)
+	if err != nil {
+		return err
+	}
 	if len(runningDockboxes) > 0 {
 		fmt.Print("RUNNING\n-----------\n")
 		fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
@@ -71,20 +70,26 @@ func printGlobalDockboxes(cli *client.Client, foundImages map[string]bool, findI
 		fmt.Println("----------------")
 	}
 
-	dockboxImages := getDockboxImages(cli, options)
+	dockboxImages, err := getDockboxImages(ctx, cli, listOptions)
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
 	for _, image := range dockboxImages {
 		boxName := repoTagToDockboxName(image.RepoTags[0])
 		fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0))
 	}
 	w.Flush()
+	return nil
 }
 
-func getDockboxImages(cli *client.Client, options ListOptions) []types.ImageSummary {
+func getDockboxImages(ctx context.Context, cli *client.Client, options ListOptions) ([]types.ImageSummary, error) {
 	filteredByPath := getDockboxesFromPaths(options)
 
-	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
-	CheckError(err)
+	images, err := cli.ImageList(ctx, types.ImageListOptions{})
+	if err != nil {
+		return nil, err
+	}
 
 	dockboxImages := make([]types.ImageSummary, 0)
 
@@ -107,14 +112,16 @@ func getDockboxImages(cli *client.Client, options ListOptions) []types.ImageSumm
 		}
 	}
 
-	return dockboxImages
+	return dockboxImages, nil
 }
 
-func getRunningDockboxImages(cli *client.Client, options ListOptions) []types.Container {
+func getRunningDockboxImages(ctx context.Context, cli *client.Client, options ListOptions) ([]types.Container, error) {
 	filteredByPath := getDockboxesFromPaths(options)
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
-	CheckError(err)
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		return nil, err
+	}
 
 	dockboxContainers := make([]types.Container, 0)
 
@@ -128,7 +135,7 @@ func getRunningDockboxImages(cli *client.Client, options ListOptions) []types.Co
 		}
 	}
 
-	return dockboxContainers
+	return dockboxContainers, nil
 }
 
 func getDockboxesFromPaths(options ListOptions) map[string]bool {
@@ -160,9 +167,4 @@ func getDockboxesFromPaths(options ListOptions) map[string]bool {
 		})
 	}
 	return foundImages
-}
-
-func init() {
-	rootCmd.AddCommand(listCmd)
-
 }
