@@ -8,6 +8,7 @@ require (
 	github.com/docker/docker v20.10.7+incompatible
 	github.com/docker/docker-credential-helpers v0.6.4 // indirect
 	github.com/fvbommel/sortorder v1.0.2 // indirect
+	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/hashicorp/go-getter v1.5.5
 	github.com/karrick/godirwalk v1.16.1

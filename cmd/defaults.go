@@ -6,12 +6,6 @@ import (
 
 var IgnoredFilesForAnalysis = []string{".git/*"}
 
-type Image struct {
-	Image      string
-	Commands   []string
-	EntryPoint string
-}
-
 // type Command struct {
 
 // }

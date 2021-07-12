@@ -26,43 +26,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type TreeOptions struct {
-	All bool
-}
-
-var treeOptions = TreeOptions{}
-
 // treeCmd represents the tree command
-var treeCmd = &cobra.Command{
-	Use:   "tree",
-	Short: "Shows a tree of dockbox image histories",
-	Long:  `A command to visualize the tree structure of the dependencies of your image`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		CheckError(err)
-		forest, err := buildImageForest(context.Background(), cli, treeOptions)
-		CheckError(err)
+func NewTreeCommand(cli *client.Client) *cobra.Command {
+	var treeOptions = TreeOptions{}
+	var treeCmd = &cobra.Command{
+		Use:   "tree",
+		Short: "Shows a tree of dockbox image histories",
+		Long:  `A command to visualize the tree structure of the dependencies of your image`,
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			CheckError(RunTreeCommand(cli, treeOptions))
+		},
+	}
+	treeCmd.PersistentFlags().BoolVarP(&treeOptions.All, "all", "a", false, "Use all images on system (not just dockboxes)")
 
-		for _, tree := range forest.roots {
-			tree.PrintTree()
-		}
-		if len(forest.roots) == 0 {
-			fmt.Println("No images found")
-		}
-	},
+	return treeCmd
 }
 
-type ImageNode struct {
-	children map[string]*ImageNode
-	parent   *ImageNode
-	name     string
-	ID       string
-}
+func RunTreeCommand(cli *client.Client, treeOptions TreeOptions) error {
+	ctx := context.Background()
+	forest, err := buildImageForest(ctx, cli, treeOptions)
+	if err != nil {
+		return err
+	}
 
-type ImageForest struct {
-	roots    []*ImageNode
-	leaves   []*ImageNode
-	IDToNode map[string]*ImageNode
+	if len(forest.roots) == 0 {
+		fmt.Println("No images found")
+	}
+
+	for _, tree := range forest.roots {
+		tree.PrintTree()
+	}
+	return nil
 }
 
 func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeOptions) (*ImageForest, error) {
@@ -74,7 +69,11 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 			return nil, errorImageList
 		}
 	} else {
-		dockboxImages = getDockboxImages(cli, ListOptions{})
+		var errGetDockboxes error
+		dockboxImages, errGetDockboxes = getDockboxImages(ctx, cli, ListOptions{})
+		if errGetDockboxes != nil {
+			return nil, errGetDockboxes
+		}
 	}
 
 	leafList := make([]*ImageNode, len(dockboxImages))
@@ -160,19 +159,4 @@ func (node *ImageNode) PrintTree() {
 	builder := &strings.Builder{}
 	node.print(builder, "", "")
 	fmt.Print(builder.String())
-}
-
-func init() {
-	// TODO: Add command
-	rootCmd.AddCommand(treeCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	treeCmd.PersistentFlags().BoolVarP(&treeOptions.All, "all", "a", false, "Use all images on system (not just dockboxes)")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// treeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

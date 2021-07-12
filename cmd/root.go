@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -28,10 +29,11 @@ import (
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "dockbox",
-	Short: "Try out code without creating any side effects!",
-	Long: `
+func NewRootCmd(cli *client.Client) *cobra.Command {
+	var rootCmd = &cobra.Command{
+		Use:   "dockbox",
+		Short: "Try out code without creating any side effects!",
+		Long: `
 Usage: dockbox [OPTIONS] COMMAND
 
 Manage workspaces and dependencies with ease in an isolated, secure environment.
@@ -39,26 +41,29 @@ Manage workspaces and dependencies with ease in an isolated, secure environment.
 To get started with dockbox, try entering:
 
 	dockbox create <url>`,
+	}
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.dockbox.yaml)")
+
+	rootCmd.AddCommand(
+		NewCleanCommand(cli),
+		NewCreateCommand(cli),
+		NewEnterCommand(cli),
+		NewListCommand(cli),
+		NewTreeCommand(cli),
+	)
+	return rootCmd
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	cobra.CheckErr(rootCmd.Execute())
+	cli, err := client.NewClientWithOpts()
+	CheckError(err)
+	rootCmd := NewRootCmd(cli)
+	CheckError(rootCmd.Execute())
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.dockbox.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // initConfig reads in config file and ENV variables if set.
