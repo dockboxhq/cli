@@ -1,4 +1,5 @@
 # dockbox
+![build status](https://github.com/sriharivishnu/dockbox/actions/workflows/go.yml/badge.svg)
 
 `dockbox` is a useful CLI tool for trying out code from remote repositories. It allows you to to try out code quickly and easily without compromising your own system, and easily organize your workspace. Plus, it makes it very easy to delete the dependencies and other side effects that result from running the code.
 
