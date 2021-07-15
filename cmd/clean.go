@@ -44,22 +44,6 @@ func NewCleanCommand(cli *client.Client) *cobra.Command {
 			}
 			cleanCmdOptions.dockboxName = dockboxName
 
-			// images, err := cli.ImageList(ctx, types.ImageListOptions{})
-			// CheckError(err)
-
-			// for _, image := range images {
-			// 	if len(image.RepoTags) == 0 {
-			// 		continue
-			// 	}
-			// 	if isImageDockbox(image.RepoTags[0]) {
-			// 		// Remove dependent containers before deleting image
-			// 		log.Printf("Removing containers for image %s", image.RepoTags[0])
-			// 		removeContainersForImage(ctx, cli, imageToContainer, image.ID)
-			// 		err = deleteImageAndParents(ctx, cli, image.ID)
-			// 		CheckError(err)
-			// 		log.Printf("Deleted dockbox: %s", image.RepoTags[0])
-			// 	}
-			// }
 			CheckError(RunCleanCommand(cli, cleanCmdOptions))
 		},
 		Args: cobra.ExactArgs(1),
