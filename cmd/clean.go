@@ -106,8 +106,8 @@ func postOrder(root *ImageNode, reachedTaggedLeaves *[]*ImageNode, visitedStack 
 	if root == nil {
 		return
 	}
-	// if len(root.children) == 0 && root.name != "<none>:<none>" {
-	if len(root.children) == 0 {
+	if len(root.children) == 0 && root.name != "<none>:<none>" {
+		// if len(root.children) == 0 {
 		*reachedTaggedLeaves = append(*reachedTaggedLeaves, root)
 	}
 	for _, child := range root.children {
