@@ -155,6 +155,12 @@ func RunCreateCommand(cli *client.Client, createOptions CreateOptions) error {
 	}
 
 	_, err = runContainer(context.Background(), cli, containerID)
+	if err != nil {
+		return err
+	}
+	// if createOptions.remove {
+	// 	deleteImageWithTree(ctx, cli, imageName)
+	// }
 	return err
 }
 

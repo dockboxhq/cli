@@ -83,8 +83,14 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 	inRootList := make(map[string]bool)
 
 	for i, image := range dockboxImages {
+		var name string
+		if len(image.RepoTags) > 0 {
+			name = repoTagToDockboxName(image.RepoTags[0])
+		} else {
+			name = image.ID
+		}
 		leafList[i] = &ImageNode{
-			name:     repoTagToDockboxName(image.RepoTags[0]),
+			name:     name,
 			ID:       image.ID,
 			children: make(map[string]*ImageNode),
 		}
