@@ -58,6 +58,12 @@ Flags:
 Use "dockbox [command] --help" for more information about a command.
 ```
 
+### Clean up
+Easily clean up relevant images and side effects with the `dockbox clean` command
+
+
+<img width="1098" alt="Screen Shot 2021-07-17 at 3 12 39 AM" src="https://user-images.githubusercontent.com/37857112/126029307-a11f14fe-d5f1-47f5-95af-af0a7145bb8b.png">
+
 ## Roadmap
 
 This project is still a work in progress! We will continue to add more features as we explore more use cases. If you have ideas on possible additions of features you would like to see added to dockbox, reach out at srihari.vishnu@gmail.com, or better yet, open a pull request!
