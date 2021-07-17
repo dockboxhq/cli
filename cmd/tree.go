@@ -54,9 +54,7 @@ func RunTreeCommand(cli *client.Client, treeOptions TreeOptions) error {
 		fmt.Println("No images found")
 	}
 
-	for _, tree := range forest.roots {
-		tree.PrintTree()
-	}
+	forest.PrintForest(ForestPrintOptions{})
 	return nil
 }
 
@@ -142,27 +140,53 @@ func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeO
 }
 
 // Adapted from https://stackoverflow.com/questions/4965335/how-to-print-binary-tree-diagram-in-java
-func (node *ImageNode) print(sb *strings.Builder, prefix string, childrenPrefix string) {
+func (node *ImageNode) print(sb *strings.Builder, prefix string, childrenPrefix string, printOptions ForestPrintOptions) {
 	sb.WriteString(prefix)
+	var item string
 	if node.name == "" {
-		sb.WriteString(node.ID)
+		item = node.ID
 	} else {
-		sb.WriteString(node.name)
+		item = node.name
 	}
+	var textColour string
+	if val, ok := printOptions.colorIDS[node.ID]; ok {
+		textColour = val
+	} else {
+		textColour = printOptions.textColor
+	}
+	item = textColour + item
+	if printOptions.textColorCurNodeOnly {
+		item += "\033[0m"
+	} else {
+		printOptions.textColor = textColour
+	}
+	sb.WriteString(item)
+
 	sb.WriteString("\n")
 	i := 0
 	for _, child := range node.children {
 		if i < len(node.children)-1 {
-			child.print(sb, childrenPrefix+"├── ", childrenPrefix+"│   ")
+			child.print(sb, childrenPrefix+"├── ", childrenPrefix+textColour+"│   "+printOptions.textColor, printOptions)
 		} else {
-			child.print(sb, childrenPrefix+"└── ", childrenPrefix+"    ")
+			child.print(sb, childrenPrefix+textColour+"└── "+printOptions.textColor, childrenPrefix+"    ", printOptions)
 		}
 		i++
 	}
 }
 
-func (node *ImageNode) PrintTree() {
+func (node *ImageNode) PrintTree(printOptions ForestPrintOptions) {
 	builder := &strings.Builder{}
-	node.print(builder, "", "")
+	if printOptions.textColor == "" {
+		printOptions.textColor = "\033[0m"
+	}
+	node.print(builder, "", "", printOptions)
 	fmt.Print(builder.String())
+	// reset colour
+	fmt.Print("\033[0m")
+}
+
+func (forest *ImageForest) PrintForest(printOptions ForestPrintOptions) {
+	for _, tree := range forest.roots {
+		tree.PrintTree(printOptions)
+	}
 }

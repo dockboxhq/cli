@@ -47,3 +47,10 @@ type ImageForest struct {
 	leaves   []*ImageNode
 	IDToNode map[string]*ImageNode
 }
+
+type ForestPrintOptions struct {
+	textColor            string
+	colorIDS             map[string]string
+	textColorCurNodeOnly bool
+	branchColor          string
+}

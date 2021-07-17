@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"io"
 	"log"
 	"runtime"
@@ -48,11 +50,54 @@ func GetUserString(prompt string, a ...interface{}) (string, error) {
 	return input, nil
 }
 
-func PrintJSONBuildStatus(jsonText string) {
-	var result map[string]interface{}
-	json.Unmarshal([]byte(jsonText), &result)
-	if val, ok := result["status"]; ok {
-		fmt.Print(val)
+func printStatus(result map[string]interface{}) {
+	if result["id"] == nil {
+		result["id"] = ""
+	}
+	if result["progress"] == nil {
+		result["progress"] = ""
+	}
+	fmt.Printf("%s %s %s", result["status"], result["id"], result["progress"])
+}
+
+func printImageBuildOutput(scanner *bufio.Scanner) {
+	curLine := 0
+	lastLine := 0
+	IDToLine := make(map[string]int)
+	for scanner.Scan() {
+		jsonText := scanner.Text()
+		// fmt.Println(jsonText)
+		var result map[string]interface{}
+		json.Unmarshal([]byte(jsonText), &result)
+		// log.Print(jsonText)
+		if val, ok := result["stream"]; ok {
+			fmt.Print(val.(string))
+			continue
+		}
+
+		if _, ok := result["status"]; ok {
+			if _, ok2 := result["id"]; !ok2 {
+				fmt.Println(result["status"])
+				continue
+			}
+			ID := result["id"].(string)
+			if _, ok := IDToLine[ID]; !ok {
+				IDToLine[ID] = lastLine
+				lastLine++
+			}
+			if curLine < IDToLine[ID] {
+				// Move up
+				fmt.Printf("%c[%dA", 27, IDToLine[ID]-curLine)
+
+			} else if curLine > IDToLine[ID] {
+				// Move down
+				fmt.Printf("%c[%dB", 27, curLine-IDToLine[ID])
+			}
+			curLine = IDToLine[ID]
+			fmt.Printf("%c[2K\r", 27)
+			printStatus(result)
+
+		}
 	}
 }
 

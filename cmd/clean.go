@@ -102,15 +102,16 @@ func removeContainersForImage(ctx context.Context, cli *client.Client, imageToCo
 	return nil
 }
 
-func postOrder(root *ImageNode, reachedLeaves *[]*ImageNode, visitedStack *[]*ImageNode) {
+func postOrder(root *ImageNode, reachedTaggedLeaves *[]*ImageNode, visitedStack *[]*ImageNode) {
 	if root == nil {
 		return
 	}
+	// if len(root.children) == 0 && root.name != "<none>:<none>" {
 	if len(root.children) == 0 {
-		*reachedLeaves = append(*reachedLeaves, root)
+		*reachedTaggedLeaves = append(*reachedTaggedLeaves, root)
 	}
 	for _, child := range root.children {
-		postOrder(child, reachedLeaves, visitedStack)
+		postOrder(child, reachedTaggedLeaves, visitedStack)
 	}
 	*visitedStack = append(*visitedStack, root)
 }
@@ -135,23 +136,29 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 		return errors.New("unknown error occurred while deleting: node not found")
 	}
 	log.Printf("Starting with %s %s\n", node.ID, node.name)
+	// var rootParent *ImageNode = nil
+
 	for node.parent != nil {
+		// rootParent = node.parent
+
 		lastNode = node
 		node = node.parent
-		reachedLeaves, visitedStack := make([]*ImageNode, 0), make([]*ImageNode, 0)
+		reachedTaggedLeaves, visitedStack := make([]*ImageNode, 0), make([]*ImageNode, 0)
 		for _, child := range node.children {
 			if child.ID != lastNode.ID {
-				postOrder(child, &reachedLeaves, &visitedStack)
+				postOrder(child, &reachedTaggedLeaves, &visitedStack)
 			}
 		}
 		// Only need to ask for confirmation for tagged images or images with multiple children
 		var res bool = true
 		var err error = nil
-		if len(reachedLeaves) > 0 {
+		if len(reachedTaggedLeaves) > 0 {
 			fmt.Printf("Warning: Removing %s %s will also remove the following images:\n", node.name, node.ID)
-			for _, leaf := range reachedLeaves {
-				fmt.Printf("- %s %s\n", leaf.ID, leaf.name)
-			}
+			node.PrintTree(ForestPrintOptions{textColor: "\033[31m"})
+			// for _, leaf := range reachedTaggedLeaves {
+			// 	fmt.Printf("- %s %s\n", leaf.ID, leaf.name)
+			// }
+			printNodes(reachedTaggedLeaves, "")
 			res, err = GetUserBoolean(fmt.Sprintf("Confirm removal of %s %s and all the above images?", node.name, node.ID))
 		} else if node.name != "" {
 			res, err = GetUserBoolean("Remove parent image: %s %s?", node.name, node.ID)
@@ -161,12 +168,20 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 			return err
 		}
 		if !res {
+			for node.parent != nil {
+				// rootParent = node.parent
+				node = node.parent
+			}
 			break
 		}
 		deletionOrder = append(deletionOrder, visitedStack...)
 		deletionOrder = append(deletionOrder, node)
 	}
-	printNodes(deletionOrder, "Deletion List")
+	forest.PrintForest(ForestPrintOptions{colorIDS: map[string]string{deletionOrder[len(deletionOrder)-1].ID: "\033[31m"}})
+	// if rootParent != nil && len(deletionOrder) > 0 {
+	// 	rootParent.PrintTree(ForestPrintOptions{colorIDS: map[string]string{deletionOrder[len(deletionOrder)-1].ID: "\033[31m"}})
+	// }
+	// printNodes(deletionOrder, "Deletion List")
 	res, err := GetUserBoolean("Confirm deletion?")
 	if err != nil {
 		return err
@@ -180,7 +195,7 @@ func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName stri
 	CheckError(err)
 	for _, image := range deletionOrder {
 		if image.name != "<none>:<none>" {
-			err = removeContainersForImage(ctx, cli, imageToContainer, imageName)
+			err = removeContainersForImage(ctx, cli, imageToContainer, image.ID)
 			if err != nil && !strings.HasPrefix(err.Error(), "Error: No such container:") {
 				return err
 			}
