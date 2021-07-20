@@ -41,14 +41,13 @@ import (
 
 	// "github.com/mitchellh/go-homedir"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 
 	getter "github.com/hashicorp/go-getter"
 )
 
 // createCmd represents the create command
-func NewCreateCommand(cli *client.Client) *cobra.Command {
+func NewCreateCommand(cli dockerClient) *cobra.Command {
 	var createOptions CreateOptions
 	var createCmd = &cobra.Command{
 		Use:   "create [<source>] [<directory>]",
@@ -77,7 +76,7 @@ func NewCreateCommand(cli *client.Client) *cobra.Command {
 	return createCmd
 }
 
-func RunCreateCommand(cli *client.Client, createOptions CreateOptions) error {
+func RunCreateCommand(cli dockerClient, createOptions CreateOptions) error {
 	dockboxName := ""
 	// User passed in a file path
 	if exists, info, _ := pathExists(createOptions.source); exists {
@@ -329,7 +328,7 @@ func createDockerFileForLanguage(dirPath string, language Image) (string, error)
 	return dockerFileName, nil
 }
 
-func buildImage(dockerClient *client.Client, dirPath string, dockerFileName string, dockboxName string) (string, error) {
+func buildImage(cli dockerClient, dirPath string, dockerFileName string, dockboxName string) (string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -343,7 +342,7 @@ func buildImage(dockerClient *client.Client, dirPath string, dockerFileName stri
 		Tags:       []string{imageName},
 		Remove:     true,
 	}
-	res, err := dockerClient.ImageBuild(ctx, tar, opts)
+	res, err := cli.ImageBuild(ctx, tar, opts)
 	if err != nil {
 		return "", err
 	}

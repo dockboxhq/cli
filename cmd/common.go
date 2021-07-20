@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/docker/docker/client"
 	"github.com/spf13/viper"
 )
 
@@ -100,7 +99,7 @@ func pathExists(path string) (bool, os.FileInfo, error) {
 	return false, nil, err
 }
 
-func checkDockboxExists(ctx context.Context, cli *client.Client, name string) bool {
+func checkDockboxExists(ctx context.Context, cli dockerClient, name string) bool {
 	imageName := repoTagToDockboxName(name)
 	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 	return err != nil

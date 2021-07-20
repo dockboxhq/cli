@@ -22,15 +22,14 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 )
 
 // treeCmd represents the tree command
-func NewTreeCommand(cli *client.Client) *cobra.Command {
+func NewTreeCommand(cli dockerClient) *cobra.Command {
 	var treeOptions = TreeOptions{}
 	var treeCmd = &cobra.Command{
-		Use:   "tree",
+		Use:   "tree [OPTS]",
 		Short: "Shows a tree of dockbox image histories",
 		Long:  `A command to visualize the tree structure of the dependencies of your image`,
 		Args:  cobra.ExactArgs(0),
@@ -43,7 +42,7 @@ func NewTreeCommand(cli *client.Client) *cobra.Command {
 	return treeCmd
 }
 
-func RunTreeCommand(cli *client.Client, treeOptions TreeOptions) error {
+func RunTreeCommand(cli dockerClient, treeOptions TreeOptions) error {
 	ctx := context.Background()
 	forest, err := buildImageForest(ctx, cli, treeOptions)
 	if err != nil {
@@ -58,7 +57,7 @@ func RunTreeCommand(cli *client.Client, treeOptions TreeOptions) error {
 	return nil
 }
 
-func buildImageForest(ctx context.Context, cli *client.Client, treeOptions TreeOptions) (*ImageForest, error) {
+func buildImageForest(ctx context.Context, cli dockerClient, treeOptions TreeOptions) (*ImageForest, error) {
 	var dockboxImages []types.ImageSummary
 	if treeOptions.All {
 		var errorImageList error
