@@ -22,8 +22,6 @@ import (
 
 	"github.com/moby/term"
 
-	"github.com/docker/docker/client"
-
 	"github.com/spf13/cobra"
 
 	"github.com/docker/docker/api/types"
@@ -31,7 +29,7 @@ import (
 )
 
 // enterCmd represents the enter command
-func NewEnterCommand(cli *client.Client) *cobra.Command {
+func NewEnterCommand(cli dockerClient) *cobra.Command {
 	var enterOptions EnterOptions
 	var enterCmd = &cobra.Command{
 		Use:   "enter [<path>]",
@@ -50,7 +48,7 @@ func NewEnterCommand(cli *client.Client) *cobra.Command {
 	return enterCmd
 }
 
-func RunEnterCommand(cli *client.Client, enterOptions EnterOptions) error {
+func RunEnterCommand(cli dockerClient, enterOptions EnterOptions) error {
 	ctx := context.Background()
 	if enterOptions.containerID != "" {
 		_, err := runContainer(ctx, cli, enterOptions.containerID)
@@ -71,7 +69,7 @@ func RunEnterCommand(cli *client.Client, enterOptions EnterOptions) error {
 
 }
 
-func createContainerFromPath(ctx context.Context, cli *client.Client, path string) (string, error) {
+func createContainerFromPath(ctx context.Context, cli dockerClient, path string) (string, error) {
 	imageName, err := getConfigByKey(path, "image")
 	if err != nil {
 		return "", err
@@ -94,8 +92,8 @@ func createContainerFromPath(ctx context.Context, cli *client.Client, path strin
 	return createResponse.ID, nil
 }
 
-func runContainer(ctx context.Context, dockerClient *client.Client, containerID string) (string, error) {
-	attachRes, errAttach := dockerClient.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
+func runContainer(ctx context.Context, cli dockerClient, containerID string) (string, error) {
+	attachRes, errAttach := cli.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
 		Stream: true,
 		Stdin:  true,
 		Stdout: true,
@@ -118,7 +116,7 @@ func runContainer(ctx context.Context, dockerClient *client.Client, containerID 
 		}()
 	}()
 
-	if errStart := dockerClient.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); errStart != nil {
+	if errStart := cli.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); errStart != nil {
 		<-errCh
 		return "", errStart
 	}

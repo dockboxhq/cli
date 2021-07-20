@@ -29,7 +29,7 @@ import (
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
-func NewRootCmd(cli *client.Client) *cobra.Command {
+func NewRootCmd(cli dockerClient) *cobra.Command {
 	var rootCmd = &cobra.Command{
 		Use:   "dockbox",
 		Short: "Try out code without creating any side effects!",
@@ -58,7 +58,7 @@ func Execute() {
 	cli, err := client.NewClientWithOpts()
 	CheckError(err)
 	rootCmd := NewRootCmd(cli)
-	CheckError(rootCmd.Execute())
+	rootCmd.Execute()
 }
 
 func init() {

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -29,12 +30,11 @@ import (
 	"github.com/karrick/godirwalk"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 )
 
 // listCmd represents the list command
 
-func NewListCommand(cli *client.Client) *cobra.Command {
+func NewListCommand(cli dockerClient) *cobra.Command {
 	var listOptions ListOptions
 
 	var listCmd = &cobra.Command{
@@ -46,44 +46,48 @@ func NewListCommand(cli *client.Client) *cobra.Command {
 
 			listOptions.paths = args
 
-			CheckError(RunListCommand(cli, listOptions))
+			res, err := RunListCommand(cli, listOptions)
+			CheckError(err)
+			fmt.Print(res)
 		},
 	}
 	return listCmd
 }
 
-func RunListCommand(cli *client.Client, listOptions ListOptions) error {
+func RunListCommand(cli dockerClient, listOptions ListOptions) (string, error) {
 	ctx := context.Background()
-	w := tabwriter.NewWriter(os.Stdout, 1, 1, 2, ' ', 0)
 
 	runningDockboxes, err := getRunningDockboxImages(ctx, cli, listOptions)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if len(runningDockboxes) > 0 {
-		fmt.Print("RUNNING\n-----------\n")
-		fmt.Fprintf(w, "%s\t%s\t%s\n", "ID", "IMAGE", "STATUS")
-		for _, container := range runningDockboxes {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", container.ID, repoTagToDockboxName(container.Image), container.Status)
-		}
-		w.Flush()
-		fmt.Println("----------------")
+
+	imageToStatus := make(map[string]string)
+	for _, container := range runningDockboxes {
+		imageToStatus[container.ImageID] = container.Status
 	}
 
 	dockboxImages, err := getDockboxImages(ctx, cli, listOptions)
 	if err != nil {
-		return err
+		return "", err
 	}
-	fmt.Fprintf(w, "%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED")
+
+	var buf bytes.Buffer
+	tabWriter := tabwriter.NewWriter(&buf, 1, 1, 2, ' ', 0)
+	fmt.Fprintf(tabWriter, "%s\t%s\t%s\t%s\n", "NAME", "SIZE (MB)", "CREATED", "STATUS")
 	for _, image := range dockboxImages {
 		boxName := repoTagToDockboxName(image.RepoTags[0])
-		fmt.Fprintf(w, "%v\t%d\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0))
+		status, ok := imageToStatus[image.ID]
+		if !ok {
+			status = ""
+		}
+		fmt.Fprintf(tabWriter, "%v\t%d\t%s\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0), status)
 	}
-	w.Flush()
-	return nil
+	tabWriter.Flush()
+	return buf.String(), nil
 }
 
-func getDockboxImages(ctx context.Context, cli *client.Client, options ListOptions) ([]types.ImageSummary, error) {
+func getDockboxImages(ctx context.Context, cli dockerClient, options ListOptions) ([]types.ImageSummary, error) {
 	filteredByPath := getDockboxesFromPaths(options)
 
 	images, err := cli.ImageList(ctx, types.ImageListOptions{})
@@ -115,7 +119,7 @@ func getDockboxImages(ctx context.Context, cli *client.Client, options ListOptio
 	return dockboxImages, nil
 }
 
-func getRunningDockboxImages(ctx context.Context, cli *client.Client, options ListOptions) ([]types.Container, error) {
+func getRunningDockboxImages(ctx context.Context, cli dockerClient, options ListOptions) ([]types.Container, error) {
 	filteredByPath := getDockboxesFromPaths(options)
 
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})

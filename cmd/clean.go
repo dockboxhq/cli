@@ -23,12 +23,11 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 
 	"github.com/spf13/cobra"
 )
 
-func NewCleanCommand(cli *client.Client) *cobra.Command {
+func NewCleanCommand(cli dockerClient) *cobra.Command {
 	var cleanCmdOptions = CleanOptions{}
 
 	// cleanCmd represents the clean command
@@ -56,7 +55,7 @@ func NewCleanCommand(cli *client.Client) *cobra.Command {
 	return cleanCmd
 }
 
-func RunCleanCommand(cli *client.Client, cleanOptions CleanOptions) error {
+func RunCleanCommand(cli dockerClient, cleanOptions CleanOptions) error {
 	ctx := context.Background()
 	err := deleteImageWithTree(ctx, cli, cleanOptions.dockboxName)
 	if err != nil {
@@ -67,7 +66,7 @@ func RunCleanCommand(cli *client.Client, cleanOptions CleanOptions) error {
 	return nil
 }
 
-func populateImageToContainer(ctx context.Context, cli *client.Client, imageToContainer map[string][]string) error {
+func populateImageToContainer(ctx context.Context, cli dockerClient, imageToContainer map[string][]string) error {
 	log.Printf("Populating image to container map...")
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
@@ -83,7 +82,7 @@ func populateImageToContainer(ctx context.Context, cli *client.Client, imageToCo
 	return nil
 }
 
-func removeContainersForImage(ctx context.Context, cli *client.Client, imageToContainer map[string][]string, imageID string) error {
+func removeContainersForImage(ctx context.Context, cli dockerClient, imageToContainer map[string][]string, imageID string) error {
 	for _, containerID := range imageToContainer[imageID] {
 		errContainerRemove := cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{})
 		log.Printf("Removing container: %s", containerID)
@@ -116,7 +115,7 @@ func postOrder(root *ImageNode, reachedTaggedLeaves *[]*ImageNode, visitedStack 
 	*visitedStack = append(*visitedStack, root)
 }
 
-func deleteImageWithTree(ctx context.Context, cli *client.Client, imageName string) error {
+func deleteImageWithTree(ctx context.Context, cli dockerClient, imageName string) error {
 	forest, err := buildImageForest(ctx, cli, TreeOptions{All: true})
 	if err != nil {
 		return err
