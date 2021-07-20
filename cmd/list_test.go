@@ -69,9 +69,15 @@ func TestListGlobalSuccess(t *testing.T) {
 				},
 				{
 					ID:      "some_random_container_ID_2",
-					Created: 1626748161,
+					Created: 1626548162,
 					ImageID: "some_random_ID_2",
 					Status:  "Up 32 minutes",
+				},
+				{
+					ID:      "some_random_container_ID_3",
+					Created: 1626948162,
+					ImageID: "some_random_ID_3",
+					Status:  "Up 56 minutes",
 				},
 			},
 		},
