@@ -3,12 +3,21 @@ package cmd
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/stretchr/testify/assert"
+	"gotest.tools/skip"
 )
 
+func notUTCTimezone() bool {
+	now := time.Now()
+	return now != now.UTC()
+}
+
 func TestListGlobalSuccess(t *testing.T) {
+	skip.If(t, notUTCTimezone, "this test requires UTC timezone to pass")
+
 	testcases := []struct {
 		name            string
 		foundImages     []types.ImageSummary
