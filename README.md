@@ -87,3 +87,5 @@ If there are no open issues to work on, here are some ideas on how you can contr
 - Create tests
 - Add more options to commands to give more granular control
 - Implement features for Roadmap
+
+To run tests, run `go test -v` in the cmd directory. To update the golden files, run `go test -update`.
