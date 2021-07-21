@@ -1,0 +1,3 @@
+container: b256926d765360aa19ce126bf017f6e7f3f69525c7762684241c3f7cb77123b3
+dockerfile: .dockbox/.Dockerfile.dockbox
+image: dockbox/sample1

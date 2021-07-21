@@ -1,0 +1,5 @@
+NAME      SIZE (MB)  CREATED                        STATUS
+sample1   10         2021-07-20 02:29:19 +0000 UTC  
+nested1   9          2021-07-20 02:29:20 +0000 UTC  
+nested2   123        2021-07-20 02:29:21 +0000 UTC  
+testMod2  123        2021-07-20 02:29:21 +0000 UTC  
