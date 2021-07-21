@@ -81,7 +81,7 @@ func RunListCommand(cli dockerClient, listOptions ListOptions) (string, error) {
 		if !ok {
 			status = ""
 		}
-		fmt.Fprintf(tabWriter, "%v\t%d\t%s\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0), status)
+		fmt.Fprintf(tabWriter, "%v\t%d\t%s\t%s\n", boxName, image.Size/1000000, time.Unix(image.Created, 0).UTC(), status)
 	}
 	tabWriter.Flush()
 	return buf.String(), nil
@@ -130,6 +130,9 @@ func getRunningDockboxImages(ctx context.Context, cli dockerClient, options List
 	dockboxContainers := make([]types.Container, 0)
 
 	for _, container := range containers {
+		if !isImageDockbox(container.Image) {
+			continue
+		}
 		if len(options.paths) == 0 {
 			dockboxContainers = append(dockboxContainers, container)
 		} else {
@@ -165,7 +168,7 @@ func getDockboxesFromPaths(options ListOptions) map[string]bool {
 			},
 			ErrorCallback: func(path string, err error) godirwalk.ErrorAction {
 				log.Printf("Error accessing file: %s", path)
-				return godirwalk.SkipNode
+				return godirwalk.Halt
 			},
 			Unsorted: true,
 		})
