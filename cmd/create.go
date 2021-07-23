@@ -70,8 +70,8 @@ func NewCreateCommand(cli dockerClient) *cobra.Command {
 			CheckError(RunCreateCommand(cli, createOptions))
 		},
 	}
-	createCmd.PersistentFlags().StringVarP(&createOptions.dockerFile, "dockerfile", "d", "", "Use this option to set a dockerfile")
-	createCmd.PersistentFlags().BoolVarP(&createOptions.remove, "remove", "r", false, "Removes code and artifacts after completion")
+	// createCmd.PersistentFlags().StringVarP(&createOptions.dockerFile, "dockerfile", "d", "", "Use this option to set a dockerfile")
+	// createCmd.PersistentFlags().BoolVarP(&createOptions.remove, "remove", "r", false, "Removes code and artifacts after completion")
 	// createCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
 	return createCmd
 }

@@ -48,8 +48,8 @@ func NewCleanCommand(cli dockerClient) *cobra.Command {
 		Args: cobra.ExactArgs(1),
 	}
 
-	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
-	cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
+	// cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.keepFolder, "keep", "k", false, "Keep repository folder after cleaning")
+	// cleanCmd.PersistentFlags().BoolVarP(&cleanCmdOptions.confirmBefore, "confirm", "i", false, "Confirm before deleting dockboxes")
 	cleanCmd.PersistentFlags().BoolVar(&cleanCmdOptions.isImage, "image", false, "True if given name is an image")
 
 	return cleanCmd
