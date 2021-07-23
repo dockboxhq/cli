@@ -2,49 +2,35 @@ name: Go
 
 on:
   push:
-    branches: [master]
+    branches: [ master ]
     paths-ignore:
-      - "**/README.md"
+      - '**/README.md'
   pull_request:
-    branches: [master]
-    paths-ignore:
-      - "**/README.md"
-
-permissions:
-  contents: write
+    branches: [ master ]
 
 jobs:
+
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
 
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.16
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+        
+    - name: Cache
+      uses: actions/cache@v2.1.6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('go.mod') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-
 
-      - name: Cache
-        uses: actions/cache@v2.1.6
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('go.mod') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-
+    - name: Build
+      run: go build -v ./...
 
-      - name: Build
-        run: go build -v ./...
-
-      - name: Test
-        run: go test -v ./...
-
-      - name: Release
-        uses: goreleaser/goreleaser-action@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --rm-dist
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Test
+      run: go test -v ./...
