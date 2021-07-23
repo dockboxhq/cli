@@ -62,7 +62,48 @@ Use "dockbox [command] --help" for more information about a command.
 Easily clean up relevant images and side effects with the `dockbox clean` command
 
 
-<img width="1098" alt="Screen Shot 2021-07-17 at 3 12 39 AM" src="https://user-images.githubusercontent.com/37857112/126029307-a11f14fe-d5f1-47f5-95af-af0a7145bb8b.png">
+<img width="1098" alt="Screen Shot 2021-07-17 at 3 12 39 AM" src="https://user-images.githubusercontent.com/37857112/126029307-a11f14fe-d5f1-47f5-95af-af0a7145bb8b.png" >
+
+## Algorithm
+
+### Generate Dockerfile Algorithm
+
+Currently, the algorithm for generating a Dockerfile is simple. We walk the file tree of the project, counting the number of files associated with each programming language. Then, we ask user which language should we generate a Dockerfile for, given the most frequent files found in the project.
+
+In the future, `dockbox` will compose a tree in which we can store more information about modules, and resolve multi-module projects better.
+
+### Clean Up Algorithm
+
+Internally, `dockbox` constructs a forest of images in order to construct a deletion plan for the images installed on a user's system. This is to avoid both dependent child images errors, and also associated container errors. To construct such a forest, we take each image given by Docker's List images, and run a history command using the image IDs. This approach is faster than using the Image Inspect API call (which only returns the parent image) since history only needs to be called on each of the leaf images. 
+
+<img width="600" alt="Screen Shot 2021-07-17 at 3 12 39 AM" src="https://user-images.githubusercontent.com/37857112/126732576-f1398387-6973-4cb1-91c6-3d9fb7def38e.png">
+
+Here is the description of the algorithm for deleting a node from the forest:
+```
+Algorithm:
+1. Find image ID of target Node
+2. a) If target node has children, then for each child:
+
+         i) Skip the child if it has already been previously visited
+         
+         ii) Perform a postorder search on the tree rooted at that child, adding entries to the deletion queue. 
+             If any tagged images that are leaves were visited, confirm with user before adding the entries to the deletion queue. 
+         
+   b) Else
+        i) if image is tagged, then confirm user with before adding to deletion queue
+        ii) Else, add to deletion queue immediately
+        
+3. a) If the user has aborted the search by responding no to deletion of node, or if we have reached a node in which the parent is null, 
+      then we are done.  
+   b) Otherwise, we visit the parent node and return perform steps 2 and 3 again.
+
+4. Delete the images in the deletion queue. 
+```
+
+`dockbox` uses the following data structures to aid in executing the algorithm efficiently:
+- map from Image ID to ImageNode
+- queue of Image IDs to represent deletion plan
+- each node in the forest has both a parent pointer, and an array of children
 
 ## Roadmap
 
