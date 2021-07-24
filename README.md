@@ -95,7 +95,7 @@ Algorithm:
         
 3. a) If the user has aborted the search by responding no to deletion of node, or if we have reached a node in which the parent is null, 
       then we are done.  
-   b) Otherwise, we visit the parent node and return perform steps 2 and 3 again.
+   b) Otherwise, we visit the parent node and perform steps 2-3 again.
 
 4. Delete the images in the deletion queue. 
 ```
