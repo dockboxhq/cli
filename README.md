@@ -11,19 +11,31 @@ All you need is [Docker](https://www.docker.com/get-started) installed on your s
 
 `dockbox` currently requires Docker to run. Please visit https://docs.docker.com/get-started/ for installation instructions.
 
-If installing `dockbox` from the source, run `go install` in the root directory to install dockbox on your system.
+#### Installing from Precompiled Binaries
+Install the [latest release](https://github.com/sriharivishnu/dockbox/releases/latest) for your OS/architecture. If the binary is in a non-standard location, please remember to update your PATH variable accordingly.
 
-Then run `dockbox create <url>` to create a dockbox from a URL. The code repository that you choose does not need to have a Dockerfile to run, but if it does, `dockbox` will use it to create a `dockbox`. Otherwise, it will generate one for you.
 
-Once you are done with the dockbox, clean up your resources with `dockbox clean` which will clean up all side-effects/resources associated with the code you just installed.
+#### Installing with `homebrew`
+If you have homebrew installed on your system:
+
+1. `brew tap sriharivishnu/dockbox https://github.com/sriharivishnu/dockbox`
+2. `brew install dockbox`
+
+#### Installing from Source
+
+If installing `dockbox` from the source, clone the repository and run `go install` in the root directory to install dockbox on your system.
+
+
+--- 
+After installing dockbox, run `dockbox create <url>` to create a dockbox from a URL. The code repository that you choose does not need to have a Dockerfile to run, but if it does, `dockbox` will use it to create a `dockbox`. Otherwise, it will generate one for you.
+
+Once you are done with the dockbox, clean up your resources with `dockbox clean <dockbox name>` which will clean up all side-effects/resources associated with the code you just installed. The dockbox name is usually the repository name that you cloned from, but if you want to be sure, you can use `dockbox list` to list out all the dockboxes installed on your system.
 
 To summarize, there are 5 easy steps to getting started:
 
-1. `git clone https://github.com/sriharivishnu/dockbox.git`
-2. `cd dockbox`
-3. `go install`
-4. `dockbox create <url>`
-5. `dockbox clean <dockbox name>`
+1. Install `dockbox`
+2. `dockbox create <url>`
+3. `dockbox clean <dockbox name>`
 
 For a full list of available commands, `dockbox help`
 
@@ -120,6 +132,11 @@ Features in Progress:
 
 There is still a lot of work to do on this project! All help is welcome!
 
+To get started contributing, please ensure that go and docker installed are installed on your system. After, run the following steps to build a binary and run it:
+1. `cd dockbox`
+2. `go build -v ./...`
+3. `dockbox help`
+
 The repository follows the standard structure of a Cobra Go CLI project. For questions and inquiries, again feel free to reach out at srihari.vishnu@gmail.com.
 
 If there are no open issues to work on, here are some ideas on how you can contribute:
@@ -130,3 +147,7 @@ If there are no open issues to work on, here are some ideas on how you can contr
 - Implement features for Roadmap
 
 To run tests, run `go test -v` in the cmd directory. To update the golden files, run `go test -update`.
+
+
+## License
+This project is licensed under the Apache 2.0 License. 
