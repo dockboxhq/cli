@@ -7,7 +7,7 @@
 
 All you need is [Docker](https://www.docker.com/get-started) installed on your system, and let `dockbox` do the rest.
 
-## Getting Started
+## 🚀 Getting Started
 
 `dockbox` currently requires Docker to run. Please visit https://docs.docker.com/get-started/ for installation instructions.
 
@@ -39,7 +39,7 @@ To summarize, there are 5 easy steps to getting started:
 
 For a full list of available commands, `dockbox help`
 
-## Features
+## ⭐ Features
 
 ```
 -> % dockbox help
@@ -76,7 +76,7 @@ Easily clean up relevant images and side effects with the `dockbox clean` comman
 
 <img width="1098" alt="Screen Shot 2021-07-17 at 3 12 39 AM" src="https://user-images.githubusercontent.com/37857112/126029307-a11f14fe-d5f1-47f5-95af-af0a7145bb8b.png" >
 
-## Algorithm
+## 📘 Algorithm
 
 ### Generate Dockerfile Algorithm
 
@@ -117,7 +117,7 @@ Algorithm:
 - queue of Image IDs to represent deletion plan
 - each node in the forest has both a parent pointer, and an array of children
 
-## Roadmap
+## ✈️ Roadmap
 
 This project is still a work in progress! We will continue to add more features as we explore more use cases. If you have ideas on possible additions of features you would like to see added to dockbox, reach out at srihari.vishnu@gmail.com, or better yet, open a pull request!
 
@@ -128,7 +128,7 @@ Features in Progress:
 - [ ] Multi-module support to analyze a file tree and give possible groupings of a possible project structure
   - This is useful when say having a backend and a frontend in different folders in the same repository
 
-## Contributing
+## 🧑‍🤝‍🧑 Contributing
 
 There is still a lot of work to do on this project! All help is welcome!
 
