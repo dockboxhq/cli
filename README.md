@@ -127,6 +127,7 @@ Features in Progress:
 - [ ] Adding better customizability for images and commands
 - [ ] Multi-module support to analyze a file tree and give possible groupings of a possible project structure
   - This is useful when say having a backend and a frontend in different folders in the same repository
+- [ ] Add ability to define custom rules for Dockerfile generation
 
 ## 🧑‍🤝‍🧑 Contributing
 
