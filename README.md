@@ -12,13 +12,13 @@ All you need is [Docker](https://www.docker.com/get-started) installed on your s
 `dockbox` currently requires Docker to run. Please visit https://docs.docker.com/get-started/ for installation instructions.
 
 #### Installing from Precompiled Binaries
-Install the [latest release](https://github.com/sriharivishnu/dockbox/releases/latest) for your OS/architecture. If the binary is in a non-standard location, please remember to update your PATH variable accordingly.
+Install the [latest release](https://github.com/dockboxhq/cli/releases/latest) for your OS/architecture. If the binary is in a non-standard location, please remember to update your PATH variable accordingly.
 
 
 #### Installing with `homebrew`
 If you have homebrew installed on your system:
 
-1. `brew tap sriharivishnu/dockbox https://github.com/sriharivishnu/dockbox`
+1. `brew tap sriharivishnu/dockbox https://github.com/dockboxhq/cli`
 2. `brew install dockbox`
 
 #### Installing from Source
