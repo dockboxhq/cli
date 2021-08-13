@@ -5,29 +5,29 @@
 class Cli < Formula
   desc "`dockbox` is a useful CLI tool for trying out code from remote repositories. It allows you to to try out code quickly and easily without compromising your own system"
   homepage ""
-  version "0.0.3"
+  version "0.0.3-patch"
   license "Apache-2.0"
   bottle :unneeded
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/sriharivishnu/dockbox/releases/download/v0.0.3/cli_0.0.3_Darwin_x86_64.tar.gz"
-      sha256 "be09c58496600cb797bcccade98e6d417a8be7a3d7c1d28e4af000643f58f41b"
+      url "https://github.com/dockbox/cli/releases/download/v0.0.3-patch/cli_0.0.3-patch_Darwin_x86_64.tar.gz"
+      sha256 "b5b149a64bbc1d68e522262b210b6b9e530b27cfbbc59a07ee52dee4e96d5777"
     end
     if Hardware::CPU.arm?
-      url "https://github.com/sriharivishnu/dockbox/releases/download/v0.0.3/cli_0.0.3_Darwin_arm64.tar.gz"
-      sha256 "5bc2c99b88f309154e29e6a523b7c27bda7c8fa52f5f81aa39995c5bf29fa943"
+      url "https://github.com/dockbox/cli/releases/download/v0.0.3-patch/cli_0.0.3-patch_Darwin_arm64.tar.gz"
+      sha256 "d19860a84b8943bb5a5b81493aba9ca4c5dee7cc5eeed1fff234bb5389d90ad7"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/sriharivishnu/dockbox/releases/download/v0.0.3/cli_0.0.3_Linux_x86_64.tar.gz"
-      sha256 "b45826a7c241fba25417046c928de9736bcfb8c85b79b0210f434111d17ecd1b"
+      url "https://github.com/dockbox/cli/releases/download/v0.0.3-patch/cli_0.0.3-patch_Linux_x86_64.tar.gz"
+      sha256 "89d2379a01de0b8da5dfaba0cace2907a464ea830a047f5d65c2138d9525dfd5"
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/sriharivishnu/dockbox/releases/download/v0.0.3/cli_0.0.3_Linux_arm64.tar.gz"
-      sha256 "6a98d4ab429d2456c0cbed66e31e2656640b95b01245e04923728bf04829b6a0"
+      url "https://github.com/dockbox/cli/releases/download/v0.0.3-patch/cli_0.0.3-patch_Linux_arm64.tar.gz"
+      sha256 "130bcb630c9270c830db359d4e62c5891a9323d82dc764c07a51c5ae1638eb5d"
     end
   end
 
