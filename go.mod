@@ -1,4 +1,4 @@
-module github.com/sriharivishnu/dockbox
+module github.com/dockboxhq/cli
 
 go 1.16
 

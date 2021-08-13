@@ -16,7 +16,7 @@ limitations under the License.
 package main
 
 import (
-	"github.com/sriharivishnu/dockbox/cmd"
+	"github.com/dockboxhq/cli/cmd"
 )
 
 func main() {
