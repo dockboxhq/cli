@@ -18,7 +18,7 @@ Install the [latest release](https://github.com/dockboxhq/cli/releases/latest) f
 #### Installing with `homebrew`
 If you have homebrew installed on your system:
 
-1. `brew tap sriharivishnu/dockbox https://github.com/dockboxhq/cli`
+1. `brew tap dockboxhq/cli https://github.com/dockboxhq/cli`
 2. `brew install dockbox`
 
 #### Installing from Source
